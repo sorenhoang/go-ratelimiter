@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck      # every Redis call returns an error; none of them may be dropped
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - contextcheck  # ctx must reach the Redis call, not stop at the package boundary
+    - errorlint     # forces %w and errors.Is over string comparison
+    - nilerr
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
