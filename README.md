@@ -79,7 +79,7 @@ under a threshold. That number is the whole point of the approximation.
 
 ## Progress
 
-- [ ] **00** Scaffold — go.mod, docker-compose, Makefile, golangci-lint
+- [x] **00** Scaffold — go.mod, docker-compose, Makefile, golangci-lint
 - [ ] **01** `Limiter` interface + Fixed Window + middleware + first tests
 - [ ] **02** Sliding Window Log
 - [ ] **03** Sliding Window Counter + divergence test
