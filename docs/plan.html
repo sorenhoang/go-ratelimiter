@@ -1,0 +1,687 @@
+<title>Go Rate Limiter Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+  :root {
+    --bg: #F7F8F8;
+    --surface: #FFFFFF;
+    --surface-2: #EDF1F1;
+    --line: #DBE2E2;
+    --line-strong: #C3CFCE;
+    --ink: #16201F;
+    --ink-2: #4A5856;
+    --ink-3: #72807E;
+    --accent: #0A6E73;
+    --accent-ink: #085B5F;
+    --accent-soft: #DCEDEC;
+    --allow: #1F7A4D;
+    --deny: #A33A2A;
+    --warn: #8C5E0F;
+    --shadow: 0 1px 2px rgba(22,32,31,.06), 0 8px 24px -16px rgba(22,32,31,.25);
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --serif: "IBM Plex Serif", ui-serif, Georgia, "Times New Roman", serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0E1516;
+      --surface: #141D1E;
+      --surface-2: #1B2627;
+      --line: #2A3839;
+      --line-strong: #3B4C4D;
+      --ink: #E6EDEC;
+      --ink-2: #A8B6B4;
+      --ink-3: #7D8B89;
+      --accent: #4FBFC4;
+      --accent-ink: #7FD6DA;
+      --accent-soft: #123032;
+      --allow: #4FC98A;
+      --deny: #EE8368;
+      --warn: #D9A441;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E1516;
+    --surface: #141D1E;
+    --surface-2: #1B2627;
+    --line: #2A3839;
+    --line-strong: #3B4C4D;
+    --ink: #E6EDEC;
+    --ink-2: #A8B6B4;
+    --ink-3: #7D8B89;
+    --accent: #4FBFC4;
+    --accent-ink: #7FD6DA;
+    --accent-soft: #123032;
+    --allow: #4FC98A;
+    --deny: #EE8368;
+    --warn: #D9A441;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent-ink); text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 0 72px;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead { padding-block: 56px 36px; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    font-family: var(--sans); font-size: 11px; font-weight: 600;
+    letter-spacing: .14em; text-transform: uppercase; color: var(--accent-ink);
+    margin: 0 0 14px;
+  }
+  h1 {
+    font-family: var(--sans); font-weight: 700; font-size: clamp(30px, 6vw, 46px);
+    line-height: 1.08; letter-spacing: -.02em; margin: 0 0 16px; text-wrap: balance;
+  }
+  .standfirst { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 26px; }
+  .chip {
+    font-family: var(--mono); font-size: 12px; padding: 5px 10px;
+    border: 1px solid var(--line-strong); border-radius: 3px;
+    background: var(--surface); color: var(--ink-2); white-space: nowrap;
+  }
+  .chip b { color: var(--accent-ink); font-weight: 600; }
+
+  /* ---------- layout ---------- */
+  .layout { display: grid; grid-template-columns: 1fr; gap: 0; }
+  @media (min-width: 1000px) {
+    .layout { grid-template-columns: 208px minmax(0, 1fr); gap: 48px; align-items: start; }
+    .toc { position: sticky; top: calc(24px + env(safe-area-inset-top, 0px)); }
+  }
+  .toc { padding-block: 32px; }
+  .toc h2 {
+    font-family: var(--sans); font-size: 11px; font-weight: 600; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px;
+  }
+  .toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .toc a {
+    font-family: var(--sans); font-size: 13.5px; color: var(--ink-2);
+    text-decoration: none; display: block; padding: 4px 0;
+  }
+  .toc a:hover { color: var(--accent-ink); }
+  main { min-width: 0; padding-block: 8px; }
+
+  section { padding-block: 40px; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  h2 {
+    font-family: var(--sans); font-weight: 700; font-size: 25px; letter-spacing: -.01em;
+    margin: 0 0 6px; text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--sans); font-weight: 600; font-size: 17px;
+    margin: 30px 0 8px; letter-spacing: -.005em;
+  }
+  h4 {
+    font-family: var(--sans); font-weight: 600; font-size: 12px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-3); margin: 22px 0 8px;
+  }
+  .lede { color: var(--ink-2); margin: 0 0 8px; max-width: 68ch; }
+  p { max-width: 68ch; }
+  ul, ol { max-width: 68ch; padding-left: 20px; }
+  li { margin-block: 5px; }
+  strong { font-weight: 600; }
+  code {
+    font-family: var(--mono); font-size: .86em;
+    background: var(--surface-2); padding: 1.5px 5px; border-radius: 3px;
+    color: var(--ink); word-break: break-word;
+  }
+
+  .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  pre {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.68;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 5px; padding: 16px 18px; margin: 14px 0; overflow-x: auto;
+    color: var(--ink-2);
+  }
+  pre code { background: none; padding: 0; font-size: inherit; }
+  pre .c { color: var(--ink-3); font-style: italic; }
+  pre .k { color: var(--accent-ink); }
+
+  table { border-collapse: collapse; width: 100%; font-family: var(--sans); font-size: 13.5px; margin: 14px 0; }
+  th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; border-bottom-color: var(--line-strong);
+  }
+  td { color: var(--ink-2); }
+  td:first-child { color: var(--ink); font-weight: 500; }
+  td code { font-size: 12px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- pattern cards ---------- */
+  .pattern { margin-block: 34px 0; }
+  .pattern-head {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding-bottom: 12px; border-bottom: 2px solid var(--ink);
+  }
+  .pattern-no {
+    font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent-ink);
+    font-variant-numeric: tabular-nums;
+  }
+  .pattern-head h3 { margin: 0; font-size: 21px; flex: 1 1 auto; }
+  .diff { display: flex; align-items: center; gap: 7px; font-family: var(--sans); font-size: 11px; color: var(--ink-3); letter-spacing: .08em; text-transform: uppercase; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-strong); display: block; }
+  .dots i.on { background: var(--accent); }
+  .tagline { font-style: italic; color: var(--ink-2); margin: 12px 0 0; }
+
+  .kv { display: grid; grid-template-columns: 1fr; gap: 0; margin: 16px 0 0; font-size: 14px; }
+  @media (min-width: 620px) { .kv { grid-template-columns: 116px minmax(0,1fr); } }
+  .kv dt {
+    font-family: var(--sans); font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 600; padding-top: 11px;
+  }
+  .kv dd { margin: 0; padding-block: 4px 10px; border-bottom: 1px solid var(--line); color: var(--ink-2); }
+  @media (min-width: 620px) { .kv dd { padding-top: 9px; } .kv dt { border-bottom: 1px solid var(--line); padding-bottom: 10px; } }
+
+  /* ---------- callouts ---------- */
+  .gotchas { margin: 22px 0 0; padding: 0; list-style: none; counter-reset: g; }
+  .gotcha {
+    position: relative; padding: 13px 16px 13px 18px; margin-bottom: 8px;
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 3px solid var(--warn); border-radius: 0 5px 5px 0;
+    font-size: 14.5px; color: var(--ink-2); max-width: 70ch;
+  }
+  .gotcha b { color: var(--ink); font-weight: 600; }
+  .gotcha.crit { border-left-color: var(--deny); }
+
+  .note {
+    background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    border-radius: 5px; padding: 14px 17px; margin: 18px 0; font-size: 14.5px; color: var(--ink);
+    max-width: 70ch;
+  }
+  .note strong { color: var(--accent-ink); }
+
+  .tests { margin: 18px 0 0; padding-left: 0; list-style: none; max-width: 70ch; }
+  .tests li {
+    padding: 7px 0 7px 26px; border-bottom: 1px dotted var(--line);
+    font-size: 14.5px; color: var(--ink-2); position: relative;
+  }
+  .tests li::before {
+    content: ""; position: absolute; left: 4px; top: 16px;
+    width: 9px; height: 9px; border: 1.5px solid var(--line-strong); border-radius: 2px;
+  }
+  .tests li.key { color: var(--ink); }
+  .tests li.key::before { border-color: var(--allow); background: color-mix(in srgb, var(--allow) 20%, transparent); }
+
+  /* ---------- phases ---------- */
+  .phases { list-style: none; margin: 18px 0 0; padding: 0; }
+  .phase {
+    display: grid; grid-template-columns: 38px minmax(0,1fr) auto; gap: 14px;
+    align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--line);
+  }
+  .phase-no { font-family: var(--mono); font-size: 13px; color: var(--accent-ink); font-weight: 600; }
+  .phase-body { font-family: var(--sans); font-size: 14px; color: var(--ink-2); }
+  .phase-body b { color: var(--ink); font-weight: 600; display: block; margin-bottom: 1px; }
+  .phase-est { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  .pill {
+    display: inline-block; font-family: var(--sans); font-size: 11px; font-weight: 600;
+    padding: 2px 7px; border-radius: 3px; letter-spacing: .03em;
+  }
+  .pill.good { background: color-mix(in srgb, var(--allow) 16%, transparent); color: var(--allow); }
+  .pill.bad { background: color-mix(in srgb, var(--deny) 15%, transparent); color: var(--deny); }
+  .pill.mid { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
+
+  footer {
+    padding-block: 32px; font-family: var(--sans); font-size: 13px; color: var(--ink-3);
+    border-top: 1px solid var(--line);
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">Build plan &middot; Learning repository</p>
+    <h1>Go Rate Limiter Lab</h1>
+    <p class="standfirst">Five rate limiting algorithms implemented in Go against Redis with Lua, behind one interface, with a React harness that fires identical traffic at all five so the differences become visible.</p>
+    <div class="chips">
+      <span class="chip"><b>go</b> 1.26</span>
+      <span class="chip"><b>store</b> Redis 7 + Lua</span>
+      <span class="chip"><b>module</b> single</span>
+      <span class="chip"><b>packages</b> 5 limiters</span>
+      <span class="chip"><b>server</b> one, :8080</span>
+      <span class="chip"><b>ui</b> Vite + React + TS</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Contents">
+      <h2>Contents</h2>
+      <ol>
+        <li><a href="#layout">Repository layout</a></li>
+        <li><a href="#core">Core interface</a></li>
+        <li><a href="#decisions">Design decisions</a></li>
+        <li><a href="#patterns">The five patterns</a></li>
+        <li><a href="#api">HTTP API</a></li>
+        <li><a href="#frontend">Frontend</a></li>
+        <li><a href="#testing">Testing strategy</a></li>
+        <li><a href="#roadmap">Roadmap</a></li>
+        <li><a href="#deps">Dependencies</a></li>
+        <li><a href="#compare">Comparison table</a></li>
+      </ol>
+    </nav>
+
+    <main>
+
+      <section id="layout">
+        <h2>Repository layout</h2>
+        <p class="lede">One Go module. Each algorithm is its own package implementing a shared interface, so the server can mount all five side by side.</p>
+        <pre><code>go-ratelimiter/
+├── go.mod                          <span class="c">// module github.com/spartan-binhhoang/go-ratelimiter</span>
+├── docker-compose.yml              <span class="c">// redis:7-alpine</span>
+├── Makefile                        <span class="c">// run / test / test-integration / bench / lint</span>
+├── .golangci.yml
+├── cmd/
+│   └── server/main.go              <span class="c">// wiring + graceful shutdown</span>
+├── internal/
+│   ├── limiter/
+│   │   ├── limiter.go              <span class="c">// Limiter interface, Decision, sentinel errors</span>
+│   │   ├── script.go               <span class="c">// helper: Lua reply -&gt; Decision</span>
+│   │   ├── fixedwindow/
+│   │   ├── slidingwindowlog/
+│   │   ├── slidingwindowcounter/
+│   │   ├── tokenbucket/
+│   │   └── leakybucket/
+│   ├── httpx/
+│   │   ├── middleware.go           <span class="c">// RateLimit middleware + RateLimit-* headers</span>
+│   │   ├── keyfunc.go              <span class="c">// key extraction: IP / X-API-Key / user</span>
+│   │   └── respond.go
+│   └── api/
+│       ├── router.go               <span class="c">// net/http ServeMux (Go 1.22+ patterns)</span>
+│       └── handlers.go
+├── web/                            <span class="c">// Vite + React + TS</span>
+└── docs/plan.html</code></pre>
+        <div class="note">
+          <strong>Why plain <code>net/http</code>, not chi or gin.</strong> Since Go 1.22 the standard <code>ServeMux</code> matches <code>"POST /api/limiters/{pattern}/check"</code> and exposes path values. Adding a router library to do what the standard library already does is weight without benefit. If middleware chaining ever gets hairy, swapping in <code>chi</code> is a one-line change.
+        </div>
+      </section>
+
+      <section id="core">
+        <h2>Core interface</h2>
+        <p class="lede">Every limiter satisfies the same contract. The <code>State</code> method exists purely so the frontend can visualise what is happening inside each algorithm.</p>
+        <pre><code><span class="c">// internal/limiter/limiter.go</span>
+<span class="k">package</span> limiter
+
+<span class="k">type</span> Decision <span class="k">struct</span> {
+    Allowed    bool
+    Limit      int64
+    Remaining  int64
+    ResetAfter time.Duration  <span class="c">// until the quota is whole again</span>
+    RetryAfter time.Duration  <span class="c">// until this request would pass (0 when allowed)</span>
+}
+
+<span class="k">type</span> Limiter <span class="k">interface</span> {
+    AllowN(ctx context.Context, key string, n int64) (Decision, error)
+    Name() string
+    State(ctx context.Context, key string) (map[string]any, error)
+    Reset(ctx context.Context, key string) error
+}
+
+<span class="k">var</span> ErrBackendUnavailable = errors.New("limiter: backend unavailable")</code></pre>
+
+        <h3>Conventions this repo commits to</h3>
+        <div class="scroll">
+        <table>
+          <thead><tr><th style="width:34%">Convention</th><th>Reason</th></tr></thead>
+          <tbody>
+            <tr><td>Take <code>redis.Scripter</code>, not <code>*redis.Client</code></td><td><code>Scripter</code> is an interface go-redis already exports; it accepts <code>Client</code>, <code>ClusterClient</code>, <code>Ring</code> and <code>Pipeline</code>. Accept interfaces, return structs.</td></tr>
+            <tr><td><code>redis.NewScript</code> as a package-level <code>var</code></td><td><code>Script.Run</code> issues <code>EVALSHA</code> and, on a <code>NOSCRIPT</code> reply, reloads and falls back to <code>EVAL</code> by itself. Never hand-manage the SHA.</td></tr>
+            <tr><td><code>ctx context.Context</code> first, passed through to Redis</td><td>Cancellation and deadlines reach the socket rather than being dropped at the package boundary.</td></tr>
+            <tr><td>Plain config structs, not functional options</td><td>The five limiters have five different config shapes. <code>fixedwindow.Config{Limit, Window}</code> reads better than <code>WithLimit(...)</code>. Revisit only past roughly five optional fields.</td></tr>
+            <tr><td>Wrap with <code>%w</code>, compare with <code>errors.Is</code></td><td>Redis failures must stay inspectable by the caller, never swallowed.</td></tr>
+            <tr><td>No <code>panic</code> inside <code>internal/limiter</code></td><td>Library code returns errors; the caller decides what is fatal.</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>Design decisions</h2>
+
+        <h3>The clock lives in Redis</h3>
+        <p>Every script reads the current time from <code>redis.call('TIME')</code> rather than receiving <code>time.Now()</code> from Go.</p>
+        <ul>
+          <li>With several application servers, clock skew means each node computes a different window boundary for the same key.</li>
+          <li><code>TIME</code> returns <code>{seconds, microseconds}</code>, giving microsecond resolution &mdash; enough for the token bucket to account for fractional tokens.</li>
+          <li>From Redis 5 onward scripts replicate by effect, so calling <code>TIME</code> inside Lua is legal. Earlier versions rejected it as non-deterministic.</li>
+        </ul>
+
+        <h3>What happens when Redis is down</h3>
+        <p><code>AllowN</code> returns <code>(Decision{}, ErrBackendUnavailable)</code> and the middleware decides the policy: <strong>fail-open</strong> (serve the request) or <strong>fail-closed</strong> (reject it). Expose it as <code>httpx.Config.FailOpen bool</code>, defaulting to <code>true</code>. This is a classic interview question and deserves to be a visible switch rather than a buried assumption.</p>
+      </section>
+
+      <section id="patterns">
+        <h2>The five patterns</h2>
+        <p class="lede">Numbered in build order, not alphabetically. Fixed Window comes first because it drags the whole scaffold &mdash; interface, middleware, headers, Lua helpers, test harness &mdash; into existence on the easiest algorithm. The four that follow are then pure algorithm work.</p>
+
+        <!-- 01 -->
+        <article class="pattern">
+          <div class="pattern-head">
+            <span class="pattern-no">01</span>
+            <h3>Fixed Window Counter</h3>
+            <span class="diff">Difficulty <span class="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></span>
+          </div>
+          <p class="tagline">The one that is wrong on purpose &mdash; it exists to demonstrate the boundary burst.</p>
+          <dl class="kv">
+            <dt>Key</dt><dd><code>rl:fw:{key}:{windowStart}</code> where <code>windowStart = now - (now % windowMs)</code></dd>
+            <dt>Type</dt><dd>String counter</dd>
+            <dt>Script</dt><dd>Derive <code>windowStart</code> from <code>TIME</code> &rarr; <code>GET</code> &rarr; if <code>count + n &gt; limit</code> deny &rarr; otherwise <code>INCRBY</code> and <code>PEXPIRE</code></dd>
+            <dt>Config</dt><dd><code>Limit int64</code>, <code>Window time.Duration</code></dd>
+          </dl>
+          <h4>Gotchas</h4>
+          <ol class="gotchas">
+            <li class="gotcha"><b>Sliding TTL.</b> Calling <code>PEXPIRE key window</code> on every request keeps the key alive past its own window. The correct expiry is <code>windowStart + window - now</code>, or set the TTL only when <code>INCRBY</code> returns exactly <code>n</code>, meaning the key was just created.</li>
+            <li class="gotcha crit"><b>The boundary burst.</b> At 100 requests per minute, 100 requests at 00:59.9 plus 100 at 01:00.1 is 200 requests in 200 milliseconds. Twice the configured limit, entirely within the rules.</li>
+          </ol>
+          <h4>Tests</h4>
+          <ul class="tests">
+            <li><code>limit=5</code> &rarr; five allowed, sixth denied</li>
+            <li>Fast-forward past the window boundary &rarr; five allowed again</li>
+            <li class="key"><b>Boundary-burst test.</b> Five at the end of window N, five at the start of N+1, then assert ten requests landed inside less than one window. This test is meant to pass &mdash; it documents the flaw.</li>
+            <li>TTL: the key is gone after <code>window</code> elapses</li>
+            <li>Cost greater than one (<code>n &gt; 1</code>)</li>
+          </ul>
+        </article>
+
+        <!-- 02 -->
+        <article class="pattern">
+          <div class="pattern-head">
+            <span class="pattern-no">02</span>
+            <h3>Sliding Window Log</h3>
+            <span class="diff">Difficulty <span class="dots"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></span>
+          </div>
+          <p class="tagline">Exact by construction. This becomes the ground truth the other four are measured against.</p>
+          <dl class="kv">
+            <dt>Key</dt><dd><code>rl:swl:{key}</code></dd>
+            <dt>Type</dt><dd>Sorted set &mdash; score is the millisecond timestamp, member is a unique id</dd>
+            <dt>Script</dt><dd><code>ZREMRANGEBYSCORE key 0 (now-window)</code> &rarr; <code>ZCARD</code> &rarr; if full, read the oldest entry with <code>ZRANGE key 0 0 WITHSCORES</code> to compute <code>RetryAfter = oldest + window - now</code> &rarr; otherwise <code>ZADD</code> and <code>PEXPIRE</code></dd>
+            <dt>Config</dt><dd><code>Limit int64</code>, <code>Window time.Duration</code></dd>
+          </dl>
+          <h4>Gotchas</h4>
+          <ol class="gotchas">
+            <li class="gotcha crit"><b>Members must be unique.</b> Using the timestamp as the member means two requests in the same millisecond collide &mdash; <code>ZADD</code> overwrites, the set holds one entry instead of two, the count runs low and traffic leaks past the limit. Build the member as <code>now_micros .. "-" .. INCR(counter)</code> inside Lua, or pass a UUID down from Go. This is the single most common bug in this pattern.</li>
+            <li class="gotcha"><b>Memory is O(limit) per key.</b> A limit of 10,000 across a million users is an enormous amount of sorted set. Write down in the README why production rarely picks this.</li>
+            <li class="gotcha"><b>Cost above one</b> needs <code>n</code> separate members added &mdash; or a deliberate decision that this limiter only supports <code>n = 1</code>.</li>
+          </ol>
+          <h4>Tests</h4>
+          <ul class="tests">
+            <li>Fill to <code>limit</code>, next request denied, advance one window, requests free up <em>individually</em> rather than resetting as a block</li>
+            <li class="key"><b>Two requests inside the same millisecond</b> must both be counted</li>
+            <li><code>RetryAfter</code> matches the expiry of the oldest logged entry</li>
+            <li>Sliding behaviour: allow 5 at limit 5, advance half a window &rarr; denied; advance the other half &rarr; 5 allowed</li>
+          </ul>
+        </article>
+
+        <!-- 03 -->
+        <article class="pattern">
+          <div class="pattern-head">
+            <span class="pattern-no">03</span>
+            <h3>Sliding Window Counter</h3>
+            <span class="diff">Difficulty <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span>
+          </div>
+          <p class="tagline">The approximation that ships. Cloudflare runs this one.</p>
+          <dl class="kv">
+            <dt>Keys</dt><dd><code>rl:swc:{key}:{windowStart}</code> &mdash; two are read: the current window and the previous one</dd>
+            <dt>Type</dt><dd>String counters, same shape as Fixed Window</dd>
+            <dt>Formula</dt><dd><code>weight = (window - elapsed) / window</code><br><code>estimate = prevCount * weight + currCount</code><br>allow when <code>estimate + n &lt;= limit</code></dd>
+            <dt>Script</dt><dd><code>GET prev</code>, <code>GET curr</code>, compute the estimate in floating point, compare, then <code>INCRBY curr</code> and <code>PEXPIRE curr (2*window)</code></dd>
+          </dl>
+          <h4>Gotchas</h4>
+          <ol class="gotchas">
+            <li class="gotcha"><b>It assumes the previous window was evenly spread.</b> If all 100 of the previous window's requests arrived in its first second, the weighting still treats them as uniform. Real traffic lands inside about one percent; adversarial traffic drifts further.</li>
+            <li class="gotcha"><b>TTL is <code>2*window</code>, not <code>window</code>.</b> The previous window's counter has to outlive its own window so the current one can read it.</li>
+            <li class="gotcha"><b><code>RetryAfter</code> cannot be exact.</b> It has to be approximated by solving for the moment <code>estimate</code> decays below the limit. That imprecision is a genuine property of the algorithm, not a shortcut.</li>
+            <li class="gotcha"><b>Floats crossing the Lua boundary get truncated</b> (see pattern 04). Return <code>estimate * 1000</code> as an integer, or a string.</li>
+          </ol>
+          <h4>Tests</h4>
+          <ul class="tests">
+            <li class="key"><b>Accuracy test against Sliding Window Log.</b> Generate one traffic sequence &mdash; say 200 Poisson-distributed requests over three windows &mdash; run it through both limiters, count the decisions that disagree, assert the divergence stays under a threshold such as five percent. This is the most valuable test in the repository.</li>
+            <li>Weight decay: fill the previous window, advance half a window, assert remaining is roughly <code>limit/2</code></li>
+            <li>Replay the boundary-burst scenario from pattern 01 &mdash; this limiter must deny</li>
+          </ul>
+        </article>
+
+        <!-- 04 -->
+        <article class="pattern">
+          <div class="pattern-head">
+            <span class="pattern-no">04</span>
+            <h3>Token Bucket</h3>
+            <span class="diff">Difficulty <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></span>
+          </div>
+          <p class="tagline">Burst is a feature here, not an accident.</p>
+          <dl class="kv">
+            <dt>Key</dt><dd><code>rl:tb:{key}</code></dd>
+            <dt>Type</dt><dd>Hash &mdash; <code>{ tokens, last_refill_ms }</code></dd>
+            <dt>Config</dt><dd><code>Capacity int64</code>, <code>RefillPerSecond float64</code></dd>
+          </dl>
+          <pre><code><span class="c">-- lazy refill, inside the script</span>
+elapsed = now - last_refill
+tokens  = min(capacity, tokens + elapsed/1000 * refillPerSec)
+
+<span class="k">if</span> tokens &gt;= n <span class="k">then</span> tokens = tokens - n            <span class="c">-- allow</span>
+<span class="k">else</span> retry_after = (n - tokens) / refillPerSec   <span class="c">-- deny</span>
+<span class="k">end</span>
+
+HSET tokens, last_refill = now
+PEXPIRE key (capacity / refillPerSec)             <span class="c">-- time to refill from empty</span></code></pre>
+          <h4>Gotchas</h4>
+          <ol class="gotchas">
+            <li class="gotcha crit"><b>Redis truncates Lua floats on return.</b> <code>3.7</code> arrives in Go as <code>3</code>. With fractional tokens that is a silent miscount. Return <code>tostring(tokens)</code> and parse with <code>strconv.ParseFloat</code>, or scale by <code>1e6</code> and return an integer. The defining gotcha of this pattern.</li>
+            <li class="gotcha"><b>A missing key means a full bucket</b>, not an empty one. Letting <code>nil</code> collapse to <code>0</code> denies the very first request a user ever makes.</li>
+            <li class="gotcha"><b>TTL doubles as a memory strategy.</b> <code>capacity / refillPerSec</code> is exactly how long an empty bucket takes to fill. A key idle longer than that is indistinguishable from a deleted one, so let it expire.</li>
+            <li class="gotcha"><b>No background refill goroutine.</b> Lazy refill on read is O(1) and needs no worker. If you catch yourself reaching for a <code>time.Ticker</code> to pump tokens, stop.</li>
+          </ol>
+          <h4>Tests</h4>
+          <ul class="tests">
+            <li>Burst: <code>capacity=10, rate=1/s</code> &rarr; ten back-to-back requests allowed, eleventh denied</li>
+            <li>Refill: advance five seconds &rarr; exactly five more allowed</li>
+            <li>Ceiling: advance an hour &rarr; still only <code>capacity</code> requests allowed</li>
+            <li class="key"><b>Fractional tokens.</b> <code>rate=0.5/s</code>, advance one second &rarr; half a token, <code>n=1</code> must deny; advance another second &rarr; allowed. This is the test that catches gotcha 1.</li>
+            <li><code>RetryAfter</code> equals <code>(n - tokens) / rate</code></li>
+          </ul>
+        </article>
+
+        <!-- 05 -->
+        <article class="pattern">
+          <div class="pattern-head">
+            <span class="pattern-no">05</span>
+            <h3>Leaky Bucket</h3>
+            <span class="diff">Difficulty <span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span>
+          </div>
+          <p class="tagline">Two variants in one package &mdash; the pattern with the most to teach.</p>
+
+          <h4>(a) leakybucket.Meter &mdash; Redis, consistent with the other four</h4>
+          <dl class="kv">
+            <dt>Type</dt><dd>Hash &mdash; <code>{ level, last_leak_ms }</code></dd>
+            <dt>Script</dt><dd><code>level = max(0, level - elapsed/1000 * leakPerSec)</code>; deny when <code>level + n &gt; capacity</code>, otherwise <code>level += n</code></dd>
+          </dl>
+          <p>Mathematically this is the dual of the token bucket &mdash; it counts water going in rather than tokens left over. Once both are written, the README should explain how they differ in <em>meaning</em> despite the symmetry in their formulas.</p>
+
+          <h4>(b) leakybucket.Queue &mdash; pure Go, in-process</h4>
+          <p>This is the original leaky bucket: requests queue and a worker drains them at a steady rate.</p>
+          <pre><code><span class="k">type</span> Queue <span class="k">struct</span> { ... }
+
+<span class="k">func</span> (q *Queue) Wait(ctx context.Context) error  <span class="c">// blocks for its turn, or ctx.Done()</span>
+<span class="k">func</span> (q *Queue) Close() error                    <span class="c">// drain, stop the worker</span></code></pre>
+          <p>A buffered <code>chan struct{}</code> is the queue, a <code>time.Ticker</code> is the spout. A full queue returns <code>ErrQueueFull</code> immediately rather than blocking indefinitely.</p>
+          <h4>Gotchas &mdash; this variant exists for these</h4>
+          <ol class="gotchas">
+            <li class="gotcha"><b><code>Wait</code> must select on <code>ctx.Done()</code>.</b> Otherwise a cancelled request keeps holding its slot in the queue.</li>
+            <li class="gotcha crit"><b><code>Close()</code> must drain the queue and stop the ticker</b> or goroutines leak. Non-negotiable: run <code>go test -race</code> and add <code>go.uber.org/goleak</code>.</li>
+            <li class="gotcha"><b>Never close the channel from the sending side.</b></li>
+          </ol>
+          <h4>Tests</h4>
+          <ul class="tests">
+            <li>Meter: mirrors the token bucket tests with the direction reversed</li>
+            <li class="key"><b>Queue smoothing.</b> Twenty requests into a queue at <code>rate=10/s</code> &rarr; total time around two seconds <em>and evenly spaced</em>, not bunched</li>
+            <li>Queue: cancel a context mid-wait &rarr; <code>Wait</code> returns <code>ctx.Err()</code> promptly with no leaked goroutine</li>
+            <li>Queue: <code>Close()</code> while requests are waiting &rarr; no panic, no leak (<code>goleak</code> in <code>TestMain</code>)</li>
+          </ul>
+        </article>
+
+        <h3>Optional extension: GCRA</h3>
+        <p>The Generic Cell Rate Algorithm expresses a token bucket as a single &ldquo;theoretical arrival time&rdquo; value &mdash; one field per key instead of a two-field hash, genuinely O(1) in memory. It is what <code>redis-cell</code> and <code>throttled</code> implement, and it is the strong answer when an interviewer asks whether token buckets are memory-hungry.</p>
+      </section>
+
+      <section id="api">
+        <h2>HTTP API</h2>
+        <pre><code>GET    /api/limiters                        <span class="c">// all five patterns + current config</span>
+GET    /api/limiters/{pattern}/config
+PUT    /api/limiters/{pattern}/config       <span class="c">// change limit/window/capacity at runtime</span>
+POST   /api/limiters/{pattern}/check        <span class="c">// the protected endpoint: 200 or 429</span>
+GET    /api/limiters/{pattern}/state?key=   <span class="c">// internal snapshot for the UI</span>
+POST   /api/limiters/{pattern}/reset?key=</code></pre>
+
+        <h3>Response headers</h3>
+        <p>Use the names from the IETF <code>ratelimit-headers</code> draft. The modern spec drops the <code>X-</code> prefix, so no invented <code>X-RateLimit-*</code>.</p>
+        <div class="scroll">
+        <table>
+          <thead><tr><th>Header</th><th>When</th><th>Value</th></tr></thead>
+          <tbody>
+            <tr><td><code>RateLimit-Limit</code></td><td>always</td><td>the limit in force</td></tr>
+            <tr><td><code>RateLimit-Remaining</code></td><td>always</td><td>quota left</td></tr>
+            <tr><td><code>RateLimit-Reset</code></td><td>always</td><td>seconds until reset</td></tr>
+            <tr><td><code>Retry-After</code></td><td>429 only</td><td>seconds</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Middleware signature, idiomatic Go, no framework:</p>
+        <pre><code><span class="k">func</span> RateLimit(l limiter.Limiter, cfg Config) <span class="k">func</span>(http.Handler) http.Handler</code></pre>
+        <div class="note"><strong>Note.</strong> This repository uses conventional REST, not the RPC-style endpoint rules from the Kotlin/Micronaut ruleset &mdash; those are tied to that stack and do not apply to a Go learning project.</div>
+      </section>
+
+      <section id="frontend">
+        <h2>Frontend</h2>
+        <p class="lede">Vite + React + TypeScript, <code>recharts</code> for the timeline. No state library &mdash; <code>useState</code> covers everything here.</p>
+        <ol>
+          <li><strong>Tab bar</strong> &mdash; the five patterns plus a sixth tab, <em>Compare</em>.</li>
+          <li><strong>Control panel</strong> &mdash; per-pattern config form (limit and window, or capacity and rate), Apply posts to <code>PUT /config</code>.</li>
+          <li><strong>Traffic generator</strong> &mdash; three modes: <em>Single</em> (one request), <em>Burst N</em> (N concurrent via <code>Promise.all</code>), <em>Sustained</em> (X requests per second for Y seconds).</li>
+          <li><strong>Timeline chart</strong> &mdash; time on the x-axis, one dot per request: green for 200, red for 429. This is what makes the difference between the algorithms visible rather than theoretical.</li>
+          <li><strong>State panel</strong> &mdash; polls <code>/state</code> every 250ms: tokens remaining, water level, sorted set size, or the two counters, depending on the pattern.</li>
+          <li><strong>Compare tab</strong> &mdash; fire <em>the same</em> traffic pattern at all five limiters and stack the five timelines on a shared time axis. Fixed Window's boundary burst and Token Bucket's burst allowance jump straight off the screen.</li>
+        </ol>
+        <div class="note"><strong>Deliberately skipped:</strong> SSE streaming, auth, dark mode, responsive polish. Add SSE when you want to watch traffic generated by <code>k6</code> or <code>hey</code> rather than by the browser.</div>
+      </section>
+
+      <section id="testing">
+        <h2>Testing strategy</h2>
+        <div class="scroll">
+        <table>
+          <thead><tr><th style="width:22%">Layer</th><th>Tooling</th><th style="width:22%">Runs</th></tr></thead>
+          <tbody>
+            <tr><td>Unit</td><td><code>miniredis</code> &mdash; an in-process Redis fake with <code>EVAL</code> support, plus <code>SetTime()</code> and <code>FastForward()</code> to drive the clock</td><td><code>make test</code>, no Docker</td></tr>
+            <tr><td>Integration</td><td><code>testcontainers-go</code> against real <code>redis:7-alpine</code>, behind <code>//go:build integration</code></td><td><code>make test-integration</code></td></tr>
+            <tr><td>Race</td><td><code>go test -race ./...</code></td><td>CI and pre-commit</td></tr>
+            <tr><td>Goroutine leaks</td><td><code>go.uber.org/goleak</code> in the <code>leakybucket</code> package's <code>TestMain</code></td><td>with unit tests</td></tr>
+            <tr><td>Benchmark</td><td><code>go test -bench=. -benchmem</code> &mdash; latency and allocations per <code>AllowN</code></td><td><code>make bench</code></td></tr>
+            <tr><td>Load</td><td><code>hey -n 10000 -c 100</code> or <code>k6</code></td><td>manual</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <div class="note"><strong>Keep both layers.</strong> miniredis runs Lua through a Go interpreter, not Redis's own &mdash; float formatting, <code>TIME</code> resolution and reply types will diverge at the edges. Unit tests give a fast loop; integration tests prove the scripts behave on real Redis.</div>
+        <p>Write tests table-driven, the standard Go idiom:</p>
+        <pre><code>tests := []<span class="k">struct</span> {
+    name  string
+    steps []step   <span class="c">// { advanceMs, n, wantAllowed }</span>
+}{ ... }</code></pre>
+      </section>
+
+      <section id="roadmap">
+        <h2>Roadmap</h2>
+        <p class="lede">Roughly eight part-time days. The ordering is deliberate: the hardest scaffolding work happens on the easiest algorithm.</p>
+        <ol class="phases">
+          <li class="phase"><span class="phase-no">00</span><span class="phase-body"><b>Scaffold</b><code>go mod init</code>, docker-compose, Makefile, golangci-lint, directory skeleton</span><span class="phase-est">0.5d</span></li>
+          <li class="phase"><span class="phase-no">01</span><span class="phase-body"><b>Fixed Window + foundations</b><code>Limiter</code> and <code>Decision</code>, the middleware, <code>/check</code>, first unit and integration tests</span><span class="phase-est">1.5d</span></li>
+          <li class="phase"><span class="phase-no">02</span><span class="phase-body"><b>Sliding Window Log</b>the ground truth implementation</span><span class="phase-est">0.5d</span></li>
+          <li class="phase"><span class="phase-no">03</span><span class="phase-body"><b>Sliding Window Counter</b>plus the divergence test against the log</span><span class="phase-est">1d</span></li>
+          <li class="phase"><span class="phase-no">04</span><span class="phase-body"><b>Token Bucket</b>lazy refill, fractional tokens</span><span class="phase-est">1d</span></li>
+          <li class="phase"><span class="phase-no">05</span><span class="phase-body"><b>Leaky Bucket</b>Meter on Redis, Queue in pure Go with goroutines and channels</span><span class="phase-est">1.5d</span></li>
+          <li class="phase"><span class="phase-no">06</span><span class="phase-body"><b>Frontend</b>five tabs, traffic generator, timeline chart, Compare tab</span><span class="phase-est">1.5d</span></li>
+          <li class="phase"><span class="phase-no">07</span><span class="phase-body"><b>Benchmarks and README</b>measure all five, write the trade-off table</span><span class="phase-est">0.5d</span></li>
+        </ol>
+      </section>
+
+      <section id="deps">
+        <h2>Dependencies</h2>
+        <pre><code>github.com/redis/go-redis/v9                  <span class="c">// client</span>
+github.com/alicebob/miniredis/v2              <span class="c">// test: Redis fake with EVAL</span>
+github.com/testcontainers/testcontainers-go   <span class="c">// integration tests</span>
+go.uber.org/goleak                            <span class="c">// leakybucket only</span>
+github.com/stretchr/testify                   <span class="c">// optional; stdlib testing is enough</span></code></pre>
+        <p><strong>Not added:</strong> a router &mdash; <code>net/http.ServeMux</code> since Go 1.22 covers it. <strong>Not added:</strong> viper &mdash; <code>flag</code> and <code>os.Getenv</code> handle six variables.</p>
+      </section>
+
+      <section id="compare">
+        <h2>Comparison table</h2>
+        <p class="lede">Fill this in as each pattern lands. It is the actual output of the repository &mdash; the artefact worth keeping once the code is written.</p>
+        <div class="scroll">
+        <table>
+          <thead>
+            <tr><th>Pattern</th><th>Memory / key</th><th>Accuracy</th><th>Allows burst</th><th>Smooths traffic</th><th>Lua complexity</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Fixed Window</td><td class="num">O(1)</td>
+              <td><span class="pill bad">poor &mdash; 2&times; at boundary</span></td>
+              <td>yes, unintentionally</td><td>no</td><td>low</td>
+            </tr>
+            <tr>
+              <td>Sliding Window Log</td><td class="num">O(limit)</td>
+              <td><span class="pill good">exact</span></td>
+              <td>no</td><td>no</td><td>low</td>
+            </tr>
+            <tr>
+              <td>Sliding Window Counter</td><td class="num">O(1), 2 keys</td>
+              <td><span class="pill good">~99%</span></td>
+              <td>no</td><td>no</td><td>medium</td>
+            </tr>
+            <tr>
+              <td>Token Bucket</td><td class="num">O(1), 2 fields</td>
+              <td><span class="pill good">good</span></td>
+              <td><strong>yes, by design</strong></td><td>no</td><td>medium</td>
+            </tr>
+            <tr>
+              <td>Leaky Bucket &mdash; meter</td><td class="num">O(1), 2 fields</td>
+              <td><span class="pill good">good</span></td>
+              <td>no</td><td><span class="pill mid">partly</span></td><td>medium</td>
+            </tr>
+            <tr>
+              <td>Leaky Bucket &mdash; queue</td><td class="num">O(capacity)</td>
+              <td><span class="pill good">good</span></td>
+              <td>no</td><td><strong>yes</strong></td><td>&mdash; pure Go</td>
+            </tr>
+          </tbody>
+        </table>
+        </div>
+      </section>
+
+      <footer>
+        Build order: 01 &rarr; 05, then the frontend. Fixed Window first so the scaffold is finished before the algorithms get interesting.
+      </footer>
+
+    </main>
+  </div>
+</div>
