@@ -86,11 +86,10 @@ Known defects carried forward, to fix in Phase 01:
 
 ### Carried over from step 3
 
-- [ ] `TestReset_ReturnsBackendUnavailableWhenRedisIsDown` checks only `err != nil`; it
-      never asserts `errors.Is(..., ErrBackendUnavailable)`, so `Reset`'s error wrapping
-      is untested
-- [ ] Test client needs `MaxRetries: -1` — the two backend-down tests spend ~3.5s in
-      go-redis retry backoff
+- [x] `TestReset_ReturnsBackendUnavailableWhenRedisIsDown` asserts
+      `errors.Is(..., ErrBackendUnavailable)`. Mutation-checked: dropping the sentinel
+      `%w` from `Reset` turns the test red
+- [x] Test client sets `MaxRetries: -1` — suite went from 3.68s to 0.65s
 
 ### Gate
 
