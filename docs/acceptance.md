@@ -32,35 +32,40 @@ Known defects carried forward, to fix in Phase 01:
 
 ### Contract
 
-- [ ] `internal/limiter/limiter.go` defines `Decision`, `Limiter`, and a sentinel
+- [x] `internal/limiter/limiter.go` defines `Decision`, `Limiter`, and a sentinel
       `ErrBackendUnavailable`
-- [ ] That file imports **no** Redis package — it is the abstract contract, the driver
+- [x] That file imports **no** Redis package — it is the abstract contract, the driver
       lives in each sub-package
-- [ ] `fixedwindow` asserts conformance at compile time:
+- [x] `fixedwindow` asserts conformance at compile time:
       `var _ limiter.Limiter = (*Limiter)(nil)`
 
 ### Algorithm
 
-- [ ] One `EVAL` per decision. No read-from-Go-then-write-to-Redis anywhere — that is a
+- [x] One `EVAL` per decision. No read-from-Go-then-write-to-Redis anywhere — that is a
       race by construction
-- [ ] The window boundary is derived from `redis.call('TIME')`, never from a timestamp
+- [x] The window boundary is derived from `redis.call('TIME')`, never from a timestamp
       passed down by Go
-- [ ] Key expiry does not slide: TTL is the remainder of the current window, or is set
+- [x] Key expiry does not slide: TTL is the remainder of the current window, or is set
       only on the call that creates the key
-- [ ] Redis unreachable → `AllowN` returns `ErrBackendUnavailable`, wrapped so
+- [x] Redis unreachable → `AllowN` returns `ErrBackendUnavailable`, wrapped so
       `errors.Is` matches
 
 ### Unit tests (miniredis, no Docker)
 
-- [ ] `limit=5` → five allowed, sixth denied
-- [ ] Advancing past the window boundary frees the full quota again
+- [x] `limit=5` → five allowed, sixth denied
+- [x] Advancing past the window boundary frees the full quota again
 - [ ] **Boundary burst**: five at the end of window N plus five at the start of N+1
       lands ten requests inside less than one window. This test passes — it documents
       the algorithm's flaw rather than hiding it
+      > `TestAllowN_AllowsDoubleLimitAcrossWindowBoundary` exists but advances a full
+      > window between the two bursts, so it proves quota reset, not the 2x burst.
+      > Needs `advance(59s)` before the first burst and `advance(2s)` between.
 - [ ] The key is gone once its window has elapsed
 - [ ] `n > 1` is rejected when it would cross the limit, not silently clamped
 - [ ] `Remaining`, `ResetAfter` and `RetryAfter` are asserted, not just `Allowed`
-- [ ] Redis down is covered, not only the happy path
+      > `Remaining` and `RetryAfter > 0` are covered. `ResetAfter` is never asserted
+      > against an exact value, which an aligned `baseTime` makes easy.
+- [x] Redis down is covered, not only the happy path
 
 ### HTTP layer
 
@@ -78,6 +83,14 @@ Known defects carried forward, to fix in Phase 01:
 
 - [ ] The same Lua script that passes under miniredis passes against `redis:7-alpine`
 - [ ] `make test-integration` green
+
+### Carried over from step 3
+
+- [ ] `TestReset_ReturnsBackendUnavailableWhenRedisIsDown` checks only `err != nil`; it
+      never asserts `errors.Is(..., ErrBackendUnavailable)`, so `Reset`'s error wrapping
+      is untested
+- [ ] Test client needs `MaxRetries: -1` — the two backend-down tests spend ~3.5s in
+      go-redis retry backoff
 
 ### Gate
 
