@@ -172,3 +172,111 @@ func TestReset_ReturnsBackendUnavailableWhenRedisIsDown(t *testing.T) {
 		t.Errorf("err = %v, want it to wrap ErrBackendUnavailable", err)
 	}
 }
+
+func TestAllowN_ReportsExactResetAndRetry(t *testing.T) {
+	// baseTime sits on a whole minute, so with a one minute window the clock
+	// starts exactly at a window boundary and every duration below is exact
+	// rather than "about".
+	_, l, advance := newTestLimiter(t, fixedwindow.Config{
+		Limit:  2,
+		Window: time.Minute,
+	})
+	ctx := context.Background()
+
+	d, err := l.AllowN(ctx, "user", 1)
+	if err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if d.Limit != 2 {
+		t.Errorf("Limit = %d, want 2", d.Limit)
+	}
+	if d.ResetAfter != time.Minute {
+		t.Errorf("ResetAfter = %s, want %s", d.ResetAfter, time.Minute)
+	}
+	if d.RetryAfter != 0 {
+		t.Errorf("RetryAfter = %s, want 0 while allowed", d.RetryAfter)
+	}
+
+	advance(20 * time.Second)
+
+	d, err = l.AllowN(ctx, "user", 1)
+	if err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if want := 40 * time.Second; d.ResetAfter != want {
+		t.Errorf("ResetAfter = %s, want %s", d.ResetAfter, want)
+	}
+
+	// Quota is spent; the wait to retry is the rest of this window.
+	d, err = l.AllowN(ctx, "user", 1)
+	if err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if d.Allowed {
+		t.Fatal("third request allowed, want denied")
+	}
+	if want := 40 * time.Second; d.RetryAfter != want {
+		t.Errorf("RetryAfter = %s, want %s", d.RetryAfter, want)
+	}
+}
+
+func TestAllowN_CostAboveRemainingIsRejectedNotClamped(t *testing.T) {
+	_, l, _ := newTestLimiter(t, fixedwindow.Config{
+		Limit:  5,
+		Window: time.Minute,
+	})
+	ctx := context.Background()
+
+	d, err := l.AllowN(ctx, "user", 3)
+	if err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if !d.Allowed || d.Remaining != 2 {
+		t.Fatalf("cost 3 of 5: Allowed = %v, Remaining = %d; want true, 2", d.Allowed, d.Remaining)
+	}
+
+	// 3 more would reach 6 against a limit of 5. It must be refused outright,
+	// not partially served down to the limit.
+	d, err = l.AllowN(ctx, "user", 3)
+	if err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if d.Allowed {
+		t.Error("cost 3 with 2 left was allowed, want denied")
+	}
+	if d.Remaining != 2 {
+		t.Errorf("Remaining = %d after a denial, want 2 untouched", d.Remaining)
+	}
+
+	// A cost that fits exactly still goes through.
+	d, err = l.AllowN(ctx, "user", 2)
+	if err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if !d.Allowed || d.Remaining != 0 {
+		t.Errorf("cost 2 with 2 left: Allowed = %v, Remaining = %d; want true, 0", d.Allowed, d.Remaining)
+	}
+}
+
+func TestAllowN_KeyExpiresWithItsWindow(t *testing.T) {
+	s, l, advance := newTestLimiter(t, fixedwindow.Config{
+		Limit:  5,
+		Window: time.Minute,
+	})
+	ctx := context.Background()
+
+	if _, err := l.AllowN(ctx, "user", 1); err != nil {
+		t.Fatalf("AllowN: %v", err)
+	}
+	if got := len(s.Keys()); got != 1 {
+		t.Fatalf("keys after one call = %d, want 1", got)
+	}
+
+	// The counter carries a TTL of what is left of its own window, so once that
+	// window is over Redis drops it instead of holding one key per window for
+	// every caller that ever appeared.
+	advance(time.Minute)
+	if got := s.Keys(); len(got) != 0 {
+		t.Errorf("keys after the window elapsed = %v, want none", got)
+	}
+}

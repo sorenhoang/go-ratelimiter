@@ -17,14 +17,13 @@ file exists to close.
 - [x] Redis restarted → `200` again with no server restart (pool reconnects)
 - [x] `POST /healthz` → `405` with `Allow: GET, HEAD`
 - [x] Unknown path → `404`
-- [ ] `ADDR=:9090` honoured; `ADDR=` (set but empty) falls back to `:8080`
-- [ ] `Ctrl-C` logs `shutting down` and exits without panic
-- [ ] **Drain proof**: with a 3s sleep in the handler, a request in flight during
+- [x] `ADDR=:9090` honoured; `ADDR=` (set but empty) falls back to `:8080`
+- [x] `Ctrl-C` logs `shutting down` and exits without panic
+- [x] **Drain proof**: with a 3s sleep in the handler, a request in flight during
       `Ctrl-C` completes with `200` before the process exits
 
-Known defects carried forward, to fix in Phase 01:
-- `http.Error` sends `Content-Type: text/plain` with a JSON body
-- `make lint` cannot run — `golangci-lint` is not installed
+Both defects carried forward from this phase are now closed: `httpx.WriteJSON`
+replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 ---
 
@@ -54,17 +53,12 @@ Known defects carried forward, to fix in Phase 01:
 
 - [x] `limit=5` → five allowed, sixth denied
 - [x] Advancing past the window boundary frees the full quota again
-- [ ] **Boundary burst**: five at the end of window N plus five at the start of N+1
+- [x] **Boundary burst**: five at the end of window N plus five at the start of N+1
       lands ten requests inside less than one window. This test passes — it documents
       the algorithm's flaw rather than hiding it
-      > `TestAllowN_AllowsDoubleLimitAcrossWindowBoundary` exists but advances a full
-      > window between the two bursts, so it proves quota reset, not the 2x burst.
-      > Needs `advance(59s)` before the first burst and `advance(2s)` between.
-- [ ] The key is gone once its window has elapsed
-- [ ] `n > 1` is rejected when it would cross the limit, not silently clamped
-- [ ] `Remaining`, `ResetAfter` and `RetryAfter` are asserted, not just `Allowed`
-      > `Remaining` and `RetryAfter > 0` are covered. `ResetAfter` is never asserted
-      > against an exact value, which an aligned `baseTime` makes easy.
+- [x] The key is gone once its window has elapsed
+- [x] `n > 1` is rejected when it would cross the limit, not silently clamped
+- [x] `Remaining`, `ResetAfter` and `RetryAfter` are asserted, not just `Allowed`
 - [x] Redis down is covered, not only the happy path
 
 ### HTTP layer
@@ -74,18 +68,20 @@ Known defects carried forward, to fix in Phase 01:
 - [x] `Retry-After` on `429` only — and `1`, not `0`, for a sub-second wait
 - [x] `429` body is JSON **and** `Content-Type: application/json` — this is the
       Phase 00 defect being fixed, so `http.Error` cannot be used
-- [ ] `FailOpen: true` → request passes when Redis is down;
+- [x] `FailOpen: true` → request passes when Redis is down;
       `FailOpen: false` → `503`. Both directions covered by a test
-      > The open direction is verified by hand: Redis down returns 200 and, as
-      > designed, no RateLimit-* headers. The closed direction is untested, and
-      > neither direction has an automated test.
+      > Three cases in `TestRateLimit_FailOpenOnlyForBackendOutage`, including the
+      > one that matters most: a non-backend error never opens the gate, even
+      > with FailOpen set.
 - [x] The rate limit key comes from a `KeyFunc`, so IP and API key are both reachable
       without touching the middleware
 
 ### Integration (real Redis, `//go:build integration`)
 
-- [ ] The same Lua script that passes under miniredis passes against `redis:7-alpine`
-- [ ] `make test-integration` green
+- [x] The same Lua script that passes under miniredis passes against `redis:7-alpine`
+      > Runs against the compose Redis via `REDIS_ADDR` rather than testcontainers.
+      > Same proof, one fewer dependency; revisit if CI needs its own instance.
+- [x] `make test-integration` green
 
 ### Carried over from step 3
 
@@ -96,5 +92,5 @@ Known defects carried forward, to fix in Phase 01:
 
 ### Gate
 
-- [ ] `go vet ./...`, `gofmt -l .` and `make test` clean
-- [ ] `make lint` green — requires installing `golangci-lint` first
+- [x] `go vet ./...`, `gofmt -l .` and `make test` clean
+- [x] `make lint` green — requires installing `golangci-lint` first
