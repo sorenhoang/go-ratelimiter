@@ -11,9 +11,17 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/sorenhoang/go-ratelimiter/internal/api"
+	"github.com/sorenhoang/go-ratelimiter/internal/limiter"
+	"github.com/sorenhoang/go-ratelimiter/internal/limiter/fixedwindow"
 )
 
 const shutdownTimeout = 10 * time.Second
+
+const (
+	limitPerWindow = 5
+	window         = 10 * time.Second
+)
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -22,13 +30,23 @@ func main() {
 		Addr: env("REDIS_ADDR", "localhost:6379"),
 	})
 
+	fw, err := fixedwindow.New(rdb, fixedwindow.Config{
+		Limit:  limitPerWindow,
+		Window: window,
+	})
+
+	if err != nil {
+		log.Error("failed to create fixed window limiter", "error", err)
+		os.Exit(1)
+	}
+
 	defer func() {
 		if err := rdb.Close(); err != nil {
 			log.Error("failed to close redis client", "error", err)
 		}
 	}()
 
-	mux := http.NewServeMux()
+	mux := api.New([]limiter.Limiter{fw}, true)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := rdb.Ping(r.Context()).Err(); err != nil {
 			log.Error("redis ping failed", "err", err)
