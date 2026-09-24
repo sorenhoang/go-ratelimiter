@@ -95,3 +95,57 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 - [x] `go vet ./...`, `gofmt -l .` and `make test` clean
 - [x] `make lint` green — requires installing `golangci-lint` first
+
+---
+
+## Phase 02 — Sliding Window Log
+
+### Contract
+
+- [ ] `slidingwindowlog` asserts conformance at compile time:
+      `var _ limiter.Limiter = (*Limiter)(nil)`
+- [ ] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
+      A second algorithm dropping in without touching the abstraction is the proof
+      that phase 01 drew the seams in the right place. If any of those files needs
+      an edit, say why rather than quietly making it
+
+### Algorithm
+
+- [ ] One `EVAL` per decision, clock from `redis.call('TIME')`
+- [ ] Sorted set members are unique per request. Using the timestamp as the member
+      makes two requests in the same millisecond overwrite each other, the count
+      runs low, and traffic leaks past the limit
+- [ ] The key carries a TTL, so a caller that goes quiet stops costing memory
+- [ ] `RetryAfter` is derived from the entry that actually has to expire, not
+      approximated — this algorithm knows the answer exactly, unlike phase 03
+
+### Unit tests (miniredis)
+
+- [ ] `limit=5` → five allowed, sixth denied
+- [ ] **Slides, not steps**: after the window has half passed, quota frees one
+      request at a time rather than all at once. This is the behaviour fixed window
+      cannot produce
+- [ ] **Contrast test**: the exact scenario from
+      `TestAllowN_AllowsDoubleLimitAcrossWindowBoundary` — five requests at the end
+      of a window, five just after — is **denied** here. Same input, opposite
+      verdict, and the reason this algorithm is in the repo
+- [ ] Two requests inside the same millisecond are both counted
+- [ ] `n > 1` is rejected when it would cross the limit, not silently clamped
+- [ ] `Remaining`, `ResetAfter` and `RetryAfter` asserted against exact values
+- [ ] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
+
+### HTTP
+
+- [ ] `POST /api/limiters/slidingwindowlog/check` works with no middleware or
+      router changes beyond adding the limiter to the slice in `main.go`
+
+### Integration (real Redis)
+
+- [ ] `make test-integration` green, covering the same-millisecond case that
+      miniredis might resolve differently from real Redis
+
+### Gate
+
+- [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [ ] README comparison table gains a row for this pattern, including its
+      O(limit) memory cost — the reason production usually picks phase 03 instead
