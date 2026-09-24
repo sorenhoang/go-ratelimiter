@@ -16,7 +16,7 @@ file exists to close.
 - [x] Redis stopped → `503`, and **the server process stays alive**
 - [x] Redis restarted → `200` again with no server restart (pool reconnects)
 - [x] `POST /healthz` → `405` with `Allow: GET, HEAD`
-- [ ] Unknown path → `404`
+- [x] Unknown path → `404`
 - [ ] `ADDR=:9090` honoured; `ADDR=` (set but empty) falls back to `:8080`
 - [ ] `Ctrl-C` logs `shutting down` and exits without panic
 - [ ] **Drain proof**: with a 3s sleep in the handler, a request in flight during
@@ -69,14 +69,17 @@ Known defects carried forward, to fix in Phase 01:
 
 ### HTTP layer
 
-- [ ] `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` on every response,
-      allowed or denied
-- [ ] `Retry-After` on `429` only
-- [ ] `429` body is JSON **and** `Content-Type: application/json` — this is the
+- [x] `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` on every response,
+      allowed or denied — verified by hand with curl, no automated test yet
+- [x] `Retry-After` on `429` only — and `1`, not `0`, for a sub-second wait
+- [x] `429` body is JSON **and** `Content-Type: application/json` — this is the
       Phase 00 defect being fixed, so `http.Error` cannot be used
 - [ ] `FailOpen: true` → request passes when Redis is down;
       `FailOpen: false` → `503`. Both directions covered by a test
-- [ ] The rate limit key comes from a `KeyFunc`, so IP and API key are both reachable
+      > The open direction is verified by hand: Redis down returns 200 and, as
+      > designed, no RateLimit-* headers. The closed direction is untested, and
+      > neither direction has an automated test.
+- [x] The rate limit key comes from a `KeyFunc`, so IP and API key are both reachable
       without touching the middleware
 
 ### Integration (real Redis, `//go:build integration`)
