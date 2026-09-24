@@ -64,7 +64,8 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 ### HTTP layer
 
 - [x] `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` on every response,
-      allowed or denied — verified by hand with curl, no automated test yet
+      allowed or denied — `TestRateLimit_AllowedSetsHeadersAndCallsNext`, plus a
+      live curl run against the server
 - [x] `Retry-After` on `429` only — and `1`, not `0`, for a sub-second wait
 - [x] `429` body is JSON **and** `Content-Type: application/json` — this is the
       Phase 00 defect being fixed, so `http.Error` cannot be used
