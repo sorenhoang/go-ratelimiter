@@ -314,6 +314,6 @@ whose state is fractional.
       > Mutation-checked — rounding the stored value leaves 0 and the test says
       > so. Also covers the burst settling to the rate rather than handing the
       > whole capacity back, and the TTL matching a full refill.
-- [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
-- [ ] README comparison table gains a row, including the burst it allows on
+- [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [x] README comparison table gains a row, including the burst it allows on
       purpose and the memory that buys
