@@ -251,7 +251,7 @@ whose state is fractional.
 - [x] `Config` is **not** `{Limit, Window}`. It is a capacity and a refill rate,
       and `Decision.Limit` carries the capacity. Three phases sharing a config
       shape was the coincidence; the interface has to survive one that does not
-- [ ] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api`
+- [x] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api`
       changes.** Especially here, since this is the phase that tests whether
       `Decision` was the right abstraction or merely a fitting one
 
@@ -301,8 +301,12 @@ whose state is fractional.
 
 ### HTTP, integration, gate
 
-- [ ] `POST /api/limiters/tokenbucket/check` works with no change beyond adding
+- [x] `POST /api/limiters/tokenbucket/check` works with no change beyond adding
       the limiter to the slice in `main.go`
+      > Confirmed, fourth phase running. At the same sustained rate of five per
+      > ten seconds the four answer Retry-After 6 / 10 / 5 / 2 — the bucket
+      > gives the only one a client can act on precisely, because a token at
+      > half a second apiece arrives on a schedule rather than at a boundary.
 - [ ] `make test-integration` green, including the fractional case against real
       Redis rather than miniredis' Lua interpreter
 - [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
