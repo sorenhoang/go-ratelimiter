@@ -95,3 +95,68 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 - [x] `go vet ./...`, `gofmt -l .` and `make test` clean
 - [x] `make lint` green — requires installing `golangci-lint` first
+
+---
+
+## Phase 02 — Sliding Window Log
+
+### Contract
+
+- [x] `slidingwindowlog` asserts conformance at compile time:
+      `var _ limiter.Limiter = (*Limiter)(nil)`
+- [x] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
+      A second algorithm dropping in without touching the abstraction is the proof
+      that phase 01 drew the seams in the right place. If any of those files needs
+      an edit, say why rather than quietly making it
+
+### Algorithm
+
+- [x] One `EVAL` per decision, clock from `redis.call('TIME')`
+- [x] Sorted set members are unique per request. Using the timestamp as the member
+      makes two requests in the same millisecond overwrite each other, the count
+      runs low, and traffic leaks past the limit
+- [x] The key carries a TTL, so a caller that goes quiet stops costing memory
+- [x] `RetryAfter` is derived from the entry that actually has to expire, not
+      approximated — this algorithm knows the answer exactly, unlike phase 03
+
+### Unit tests (miniredis)
+
+- [x] `limit=5` → five allowed, sixth denied
+- [x] **Slides, not steps**: after the window has half passed, quota frees one
+      request at a time rather than all at once. This is the behaviour fixed window
+      cannot produce
+- [x] **Contrast test**: the exact scenario from
+      `TestAllowN_AllowsDoubleLimitAcrossWindowBoundary` — five requests at the end
+      of a window, five just after — is **denied** here. Same input, opposite
+      verdict, and the reason this algorithm is in the repo
+- [x] Two requests inside the same millisecond are both counted
+      > Asserted through the denial of the next request, not through `Remaining`:
+      > that number is arithmetic on the count read before the write, so it reads
+      > correctly even when two entries collide. Mutation-checked.
+- [x] `n > 1` is rejected when it would cross the limit, not silently clamped
+- [x] `Remaining`, `ResetAfter` and `RetryAfter` asserted against exact values
+- [x] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
+
+### HTTP
+
+- [x] `POST /api/limiters/slidingwindowlog/check` works with no middleware or
+      router changes beyond adding the limiter to the slice in `main.go`
+      > Confirmed: `cmd/server/main.go` was the only file touched. Live, the two
+      > limiters answer the same 7 requests with Reset 1 vs 10 and retry_after
+      > 1 vs 10 — fixed window returns the whole quota when its slot rolls,
+      > the log frees one entry at a time.
+
+### Integration (real Redis)
+
+- [x] `make test-integration` green, covering the same-millisecond case that
+      miniredis might resolve differently from real Redis
+      > A tight loop on real Redis produced 5 entries across 3 distinct
+      > milliseconds, so the collision case was genuinely exercised. The test
+      > reads the sorted set directly rather than trusting Remaining.
+      > Mutation-checked: a constant token leaves 1 entry instead of 5.
+
+### Gate
+
+- [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [x] README comparison table gains a row for this pattern, including its
+      O(limit) memory cost — the reason production usually picks phase 03 instead
