@@ -160,3 +160,80 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 - [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [x] README comparison table gains a row for this pattern, including its
       O(limit) memory cost — the reason production usually picks phase 03 instead
+
+---
+
+## Phase 03 — Sliding Window Counter
+
+The approximation that ships. Two counters instead of one entry per request,
+so O(1) memory, at the cost of an estimate rather than an exact answer.
+
+### Contract
+
+- [x] `slidingwindowcounter` asserts conformance at compile time
+- [x] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
+      Two phases running says the seams hold; a third says it was not luck
+
+### Algorithm
+
+- [x] One `EVAL` per decision, clock from `redis.call('TIME')`
+- [x] Reads exactly two counters — the current window and the one before it —
+      and weights the previous one by how much of it is still in view
+- [x] TTL is **`2 * window`**, not `window`. The previous counter has to outlive
+      its own window or the current one has nothing to weight
+- [x] The weighted estimate keeps its fraction through the comparison. The
+      verdict is decided inside Lua, so unlike phase 04 no float has to cross
+      back to Go — but rounding the estimate before comparing flips decisions at
+      the boundary: an estimate of `4.5` against `limit 5, cost 1` must be
+      refused, where a floored `4` would be admitted
+- [x] `RetryAfter` is an approximation here, unlike phase 02, and the code says
+      so rather than implying a precision it does not have
+
+### Unit tests (miniredis)
+
+- [x] `limit=5` → five allowed, sixth denied
+- [x] The fixed-window boundary burst is **denied**, as in phase 02
+- [x] Weight decay: fill the previous window, advance half a window, and the
+      remaining quota is about half the limit
+- [x] A case where truncating the estimate instead of carrying the fraction would
+      flip the verdict — the test that fails if the float is lost
+- [x] The previous window's counter is still readable from the current window,
+      and both are gone once two windows have passed
+- [x] `n > 1` is rejected when it would cross the limit, not silently clamped
+- [x] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
+
+### Divergence against phase 02
+
+- [x] One deterministic request sequence is replayed through both this limiter
+      and `slidingwindowlog`, and the share of decisions that disagree is
+      asserted below a threshold. The threshold is chosen **after** measuring,
+      not guessed beforehand, and the test logs the measured rate so a
+      regression shows up as a number rather than a pass/fail
+      > Measured over 3000 requests against `limit 10` per second:
+      > **6.87%** when arrivals crowd the limit (~8/s), **0.03%** when they run
+      > well under it (~3/s). The plan's "under 1% on real traffic" holds only
+      > for the second shape; pressed against the limit the estimate is an order
+      > of magnitude worse. Thresholds set at 8% and 1% from these numbers.
+- [x] The direction of the error is recorded: whether the estimate is more
+      likely to admit traffic it should refuse, or refuse traffic it should admit
+      > It errs **strict** in both shapes: 113 refusals the log would have
+      > admitted against 93 admissions it would have refused, in the crowded
+      > case. So the approximation is conservative rather than a hole to drive
+      > through — worth knowing before choosing it over phase 02.
+
+### HTTP, integration, gate
+
+- [x] `POST /api/limiters/slidingwindowcounter/check` works with no change
+      beyond adding the limiter to the slice in `main.go`
+      > Confirmed: `cmd/server/main.go` was again the only file touched. Live,
+      > the three answer the same seven requests with Reset 6 / 10 / 16 and
+      > Retry-After 6 / 10 / 6 — each one's idea of "wait this long" falling
+      > straight out of how it stores state.
+- [x] `make test-integration` green against real Redis
+      > Checks the two places this algorithm would drift between miniredis and
+      > the real server: the TTL that keeps the previous counter alive, read
+      > back with PTTL, and the weighting itself on a real clock — the quota
+      > stays shut just into the next window and reopens three quarters through
+      > it. Mutation-checked: shortening the TTL to one window turns both red.
+- [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [x] README comparison table gains a row, including the measured divergence

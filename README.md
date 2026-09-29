@@ -8,8 +8,9 @@ This is a learning repository. The goal is not a library to import — it is to 
 each algorithm by hand, hit the real gotchas, and end up with a comparison table
 backed by actual benchmarks.
 
-> **Status: two of five algorithms built.** Fixed Window Counter and Sliding
-> Window Log both run, behind one interface and one HTTP middleware. The build
+> **Status: three of five algorithms built.** Fixed Window Counter, Sliding
+> Window Log and Sliding Window Counter all run, behind one interface and one
+> HTTP middleware. The build
 > plan lives in [`docs/plan.html`](docs/plan.html), and what each phase had to
 > prove before it was called done is in [`docs/acceptance.md`](docs/acceptance.md).
 
@@ -35,24 +36,45 @@ the textbook.
 | Pattern | Memory per key | Accuracy | The burst it allows | `RetryAfter` |
 |---------|----------------|----------|---------------------|--------------|
 | Fixed Window Counter | O(1) — one integer | Admits up to **2× the limit** around a boundary | Whole quota returns at once when the slot rolls | Exact, but only ever "until this slot ends" |
-| Sliding Window Log | **O(limit)** — one sorted set entry per request | Exact by construction | None; the window moves with the requests | Exact — read off the entry that actually has to expire |
+| Sliding Window Log | **O(limit)** — one sorted set entry per request | Exact by construction | None; the window moves with the requests | Exact — read off the entry that has to expire |
+| Sliding Window Counter | O(1) — two integers | **6.9% of decisions differ from the log** when traffic crowds the limit, 0.03% when it does not | None | Approximate — solves for when the falling estimate clears the limit |
 
-The same 7 requests at `limit=5, window=10s`, nine seconds into a window:
+The same 7 requests at `limit=5, window=10s`, six seconds into a window:
 
-| | `fixedwindow` | `slidingwindowlog` |
-|---|---|---|
-| `RateLimit-Reset` | `1` | `10` |
-| `retry_after` on 429 | `1` | `10` |
+| | `fixedwindow` | `slidingwindowlog` | `slidingwindowcounter` |
+|---|---|---|---|
+| `RateLimit-Reset` | `6` | `10` | `16` |
+| `Retry-After` on 429 | `6` | `10` | `6` |
 
-Fixed window says "wait one second" because its slot is about to roll and hand
-back the entire allowance. The log says "wait ten" because its oldest entry has
-to age out, and that frees exactly one slot. Both are right about their own
-definition, and `TestAllowN_DeniesTheBurstFixedWindowWouldAllow` pins the
-difference down: one request sequence, opposite verdicts.
+Each answer falls straight out of how the limiter stores state. Fixed window
+waits for its slot to roll and hands back the whole allowance. The log waits for
+its oldest entry to age out, and that frees exactly one slot. The counter's
+estimate only reaches zero once the current window's own count has also aged
+out, which is why its `Reset` is the longest of the three.
 
-That O(limit) row is the catch. At `limit=10000` across a million callers the log
-is an enormous amount of sorted set, which is why production usually reaches for
-the counter approximation in phase 03 instead.
+`TestAllowN_DeniesTheBurstFixedWindowWouldAllow` exists in both phase 02 and
+phase 03: one request sequence, the opposite verdict from phase 01.
+
+### What the approximation actually costs
+
+`TestDivergence_AgainstSlidingWindowLog` replays one request stream through the
+counter and through the log, which is exact by construction, and counts the
+disagreements. Over 3000 requests against a limit of 10 per second:
+
+| Arrival rate | Decisions that differ |
+|---|---|
+| ~3/s — well under the limit | **0.03%** |
+| ~8/s — crowding the limit | **6.87%** |
+
+The usual claim that this lands within a percent of exact holds only for the
+first shape. Pressed against the limit it is an order of magnitude worse — and
+that is precisely when a rate limiter is doing its job, so the number to quote
+is the second one.
+
+It errs **strict**: 113 refusals the log would have admitted against 93
+admissions it would have refused. The approximation is conservative rather than
+a hole to drive through, which is what makes trading phase 02's O(limit) memory
+for it a question of user experience rather than of security.
 
 ## Design decisions
 
@@ -117,7 +139,7 @@ under a threshold. That number is the whole point of the approximation.
 - [x] **00** Scaffold — go.mod, docker-compose, Makefile, golangci-lint
 - [x] **01** `Limiter` interface + Fixed Window + middleware + first tests
 - [x] **02** Sliding Window Log
-- [ ] **03** Sliding Window Counter + divergence test
+- [x] **03** Sliding Window Counter + divergence test
 - [ ] **04** Token Bucket
 - [ ] **05** Leaky Bucket — Redis meter + pure-Go queue
 - [ ] **06** React harness with the Compare tab
