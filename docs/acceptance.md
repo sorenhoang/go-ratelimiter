@@ -181,9 +181,11 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
       and weights the previous one by how much of it is still in view
 - [ ] TTL is **`2 * window`**, not `window`. The previous counter has to outlive
       its own window or the current one has nothing to weight
-- [ ] The weighted estimate survives the Lua/Go boundary. Redis truncates a Lua
-      float on return, so an estimate of `4.7` arriving as `4` silently changes
-      verdicts near the limit
+- [ ] The weighted estimate keeps its fraction through the comparison. The
+      verdict is decided inside Lua, so unlike phase 04 no float has to cross
+      back to Go — but rounding the estimate before comparing flips decisions at
+      the boundary: an estimate of `4.5` against `limit 5, cost 1` must be
+      refused, where a floored `4` would be admitted
 - [ ] `RetryAfter` is an approximation here, unlike phase 02, and the code says
       so rather than implying a precision it does not have
 
