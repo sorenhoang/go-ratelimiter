@@ -148,8 +148,12 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 ### Integration (real Redis)
 
-- [ ] `make test-integration` green, covering the same-millisecond case that
+- [x] `make test-integration` green, covering the same-millisecond case that
       miniredis might resolve differently from real Redis
+      > A tight loop on real Redis produced 5 entries across 3 distinct
+      > milliseconds, so the collision case was genuinely exercised. The test
+      > reads the sorted set directly rather than trusting Remaining.
+      > Mutation-checked: a constant token leaves 1 entry instead of 5.
 
 ### Gate
 
