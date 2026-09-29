@@ -235,5 +235,5 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
       > back with PTTL, and the weighting itself on a real clock — the quota
       > stays shut just into the next window and reopens three quarters through
       > it. Mutation-checked: shortening the TTL to one window turns both red.
-- [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
-- [ ] README comparison table gains a row, including the measured divergence
+- [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [x] README comparison table gains a row, including the measured divergence
