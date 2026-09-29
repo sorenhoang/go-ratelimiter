@@ -160,3 +160,60 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 - [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [x] README comparison table gains a row for this pattern, including its
       O(limit) memory cost — the reason production usually picks phase 03 instead
+
+---
+
+## Phase 03 — Sliding Window Counter
+
+The approximation that ships. Two counters instead of one entry per request,
+so O(1) memory, at the cost of an estimate rather than an exact answer.
+
+### Contract
+
+- [ ] `slidingwindowcounter` asserts conformance at compile time
+- [ ] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
+      Two phases running says the seams hold; a third says it was not luck
+
+### Algorithm
+
+- [ ] One `EVAL` per decision, clock from `redis.call('TIME')`
+- [ ] Reads exactly two counters — the current window and the one before it —
+      and weights the previous one by how much of it is still in view
+- [ ] TTL is **`2 * window`**, not `window`. The previous counter has to outlive
+      its own window or the current one has nothing to weight
+- [ ] The weighted estimate survives the Lua/Go boundary. Redis truncates a Lua
+      float on return, so an estimate of `4.7` arriving as `4` silently changes
+      verdicts near the limit
+- [ ] `RetryAfter` is an approximation here, unlike phase 02, and the code says
+      so rather than implying a precision it does not have
+
+### Unit tests (miniredis)
+
+- [ ] `limit=5` → five allowed, sixth denied
+- [ ] The fixed-window boundary burst is **denied**, as in phase 02
+- [ ] Weight decay: fill the previous window, advance half a window, and the
+      remaining quota is about half the limit
+- [ ] A case where truncating the estimate instead of carrying the fraction would
+      flip the verdict — the test that fails if the float is lost
+- [ ] The previous window's counter is still readable from the current window,
+      and both are gone once two windows have passed
+- [ ] `n > 1` is rejected when it would cross the limit, not silently clamped
+- [ ] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
+
+### Divergence against phase 02
+
+- [ ] One deterministic request sequence is replayed through both this limiter
+      and `slidingwindowlog`, and the share of decisions that disagree is
+      asserted below a threshold. The threshold is chosen **after** measuring,
+      not guessed beforehand, and the test logs the measured rate so a
+      regression shows up as a number rather than a pass/fail
+- [ ] The direction of the error is recorded: whether the estimate is more
+      likely to admit traffic it should refuse, or refuse traffic it should admit
+
+### HTTP, integration, gate
+
+- [ ] `POST /api/limiters/slidingwindowcounter/check` works with no change
+      beyond adding the limiter to the slice in `main.go`
+- [ ] `make test-integration` green against real Redis
+- [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [ ] README comparison table gains a row, including the measured divergence
