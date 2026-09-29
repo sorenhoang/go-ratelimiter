@@ -229,6 +229,11 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
       > the three answer the same seven requests with Reset 6 / 10 / 16 and
       > Retry-After 6 / 10 / 6 — each one's idea of "wait this long" falling
       > straight out of how it stores state.
-- [ ] `make test-integration` green against real Redis
+- [x] `make test-integration` green against real Redis
+      > Checks the two places this algorithm would drift between miniredis and
+      > the real server: the TTL that keeps the previous counter alive, read
+      > back with PTTL, and the weighting itself on a real clock — the quota
+      > stays shut just into the next window and reopens three quarters through
+      > it. Mutation-checked: shortening the TTL to one window turns both red.
 - [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [ ] README comparison table gains a row, including the measured divergence
