@@ -8,9 +8,9 @@ This is a learning repository. The goal is not a library to import — it is to 
 each algorithm by hand, hit the real gotchas, and end up with a comparison table
 backed by actual benchmarks.
 
-> **Status: three of five algorithms built.** Fixed Window Counter, Sliding
-> Window Log and Sliding Window Counter all run, behind one interface and one
-> HTTP middleware. The build
+> **Status: four of five algorithms built.** Fixed Window Counter, Sliding
+> Window Log, Sliding Window Counter and Token Bucket all run, behind one
+> interface and one HTTP middleware. Only Leaky Bucket is left. The build
 > plan lives in [`docs/plan.html`](docs/plan.html), and what each phase had to
 > prove before it was called done is in [`docs/acceptance.md`](docs/acceptance.md).
 
@@ -38,19 +38,22 @@ the textbook.
 | Fixed Window Counter | O(1) — one integer | Admits up to **2× the limit** around a boundary | Whole quota returns at once when the slot rolls | Exact, but only ever "until this slot ends" |
 | Sliding Window Log | **O(limit)** — one sorted set entry per request | Exact by construction | None; the window moves with the requests | Exact — read off the entry that has to expire |
 | Sliding Window Counter | O(1) — two integers | **6.9% of decisions differ from the log** when traffic crowds the limit, 0.03% when it does not | None | Approximate — solves for when the falling estimate clears the limit |
+| Token Bucket | O(1) — two hash fields, one of them fractional | Exact | **The whole capacity, on purpose** — a caller who was quiet may spend the quiet time | Exact — the deficit over the rate, and the only one a client can act on precisely |
 
-The same 7 requests at `limit=5, window=10s`, six seconds into a window:
+The same 7 requests, every limiter set to the same sustained rate of five per
+ten seconds:
 
-| | `fixedwindow` | `slidingwindowlog` | `slidingwindowcounter` |
-|---|---|---|---|
-| `RateLimit-Reset` | `6` | `10` | `16` |
-| `Retry-After` on 429 | `6` | `10` | `6` |
+| | `fixedwindow` | `slidingwindowlog` | `slidingwindowcounter` | `tokenbucket` |
+|---|---|---|---|---|
+| `Retry-After` on 429 | `6` | `10` | `5` | **`2`** |
 
 Each answer falls straight out of how the limiter stores state. Fixed window
-waits for its slot to roll and hands back the whole allowance. The log waits for
-its oldest entry to age out, and that frees exactly one slot. The counter's
-estimate only reaches zero once the current window's own count has also aged
-out, which is why its `Reset` is the longest of the three.
+points at its next boundary and then returns the whole allowance at once. The
+log waits for its oldest entry to age out, which frees exactly one slot. The
+counter solves for when its estimate decays past the limit. The bucket knows
+that at half a token per second the next one lands in two seconds — the only
+answer here a client can act on precisely, and the only one that does not
+invite a fresh burst the moment the wait is over.
 
 `TestAllowN_DeniesTheBurstFixedWindowWouldAllow` exists in both phase 02 and
 phase 03: one request sequence, the opposite verdict from phase 01.
@@ -75,6 +78,28 @@ It errs **strict**: 113 refusals the log would have admitted against 93
 admissions it would have refused. The approximation is conservative rather than
 a hole to drive through, which is what makes trading phase 02's O(limit) memory
 for it a question of user experience rather than of security.
+
+### The burst nobody else allows
+
+`TestBurst_TokenBucketAdmitsWhatTheLogRefuses` puts a token bucket and a sliding
+window log at the same sustained rate — one request per second — and sends a
+burst of ten at once:
+
+| | Admitted |
+|---|---|
+| Token Bucket, capacity 10 refilling 1/s | **10** |
+| Sliding Window Log, limit 1 per second | **1** |
+
+Over a minute the two pass roughly the same traffic. They disagree entirely
+about a caller who has been quiet and arrives with a backlog. Every other
+limiter here treats that burst as the thing to prevent; the bucket treats the
+quiet time as credit the caller earned.
+
+That is also the phase where the state is fractional. At half a token per second
+Redis holds `0.404` of a token between calls, read straight out of the hash in
+the integration test. Round it away anywhere and a bucket refilling slower than
+one token per second never fills at all — the caller is locked out for good,
+with no error raised anywhere.
 
 ## Design decisions
 
@@ -140,7 +165,7 @@ under a threshold. That number is the whole point of the approximation.
 - [x] **01** `Limiter` interface + Fixed Window + middleware + first tests
 - [x] **02** Sliding Window Log
 - [x] **03** Sliding Window Counter + divergence test
-- [ ] **04** Token Bucket
+- [x] **04** Token Bucket
 - [ ] **05** Leaky Bucket — Redis meter + pure-Go queue
 - [ ] **06** React harness with the Compare tab
 - [ ] **07** Benchmarks + comparison table

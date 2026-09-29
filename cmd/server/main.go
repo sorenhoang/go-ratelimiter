@@ -17,6 +17,7 @@ import (
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/fixedwindow"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowcounter"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowlog"
+	"github.com/sorenhoang/go-ratelimiter/internal/limiter/tokenbucket"
 )
 
 const shutdownTimeout = 10 * time.Second
@@ -28,6 +29,12 @@ type healthResponse struct {
 const (
 	limitPerWindow = 5
 	window         = 10 * time.Second
+
+	// The same sustained rate as the window limiters above -- five per ten
+	// seconds -- so a live comparison differs only in how each one treats a
+	// caller who arrives with a backlog.
+	bucketCapacity        = limitPerWindow
+	bucketRefillPerSecond = 0.5
 )
 
 func main() {
@@ -69,7 +76,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	mux := api.New([]limiter.Limiter{fw, swl, swc}, true)
+	tb, err := tokenbucket.New(rdb, tokenbucket.Config{
+		Capacity:        bucketCapacity,
+		RefillPerSecond: bucketRefillPerSecond,
+	})
+	if err != nil {
+		log.Error("failed to create token bucket limiter", "error", err)
+		os.Exit(1)
+	}
+
+	mux := api.New([]limiter.Limiter{fw, swl, swc, tb}, true)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := rdb.Ping(r.Context()).Err(); err != nil {
 			log.Error("redis ping failed", "err", err)

@@ -237,3 +237,83 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
       > it. Mutation-checked: shortening the TTL to one window turns both red.
 - [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [x] README comparison table gains a row, including the measured divergence
+
+---
+
+## Phase 04 — Token Bucket
+
+The first one where a burst is a feature rather than a defect, and the first
+whose state is fractional.
+
+### Contract
+
+- [x] `tokenbucket` asserts conformance at compile time
+- [x] `Config` is **not** `{Limit, Window}`. It is a capacity and a refill rate,
+      and `Decision.Limit` carries the capacity. Three phases sharing a config
+      shape was the coincidence; the interface has to survive one that does not
+- [x] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api`
+      changes.** Especially here, since this is the phase that tests whether
+      `Decision` was the right abstraction or merely a fitting one
+
+### Algorithm
+
+- [x] One `EVAL` per decision, clock from `redis.call('TIME')`
+- [x] Refill is lazy — computed from elapsed time on read. No ticker, no
+      background goroutine, nothing to supervise
+- [x] A key that does not exist means a **full** bucket. Letting a missing hash
+      read as zero would refuse every caller's first ever request
+- [x] **Fractional tokens survive a round trip through Redis.** This is the phase
+      where the float is persisted rather than compared and discarded, so how
+      Redis stores and returns it must be established **by test**, not assumed.
+      Losing `0.7` of a token every call silently starves the bucket
+- [x] TTL is the time to refill from empty, so a caller that goes quiet costs
+      nothing and comes back to a full bucket — which is the same answer the
+      algorithm would have given anyway
+- [x] `RetryAfter` is exact here: the deficit divided by the rate
+
+### Unit tests (miniredis)
+
+- [x] **Burst**: `capacity` requests back to back are all admitted, the next is
+      refused. No other limiter in this repo does that on purpose
+- [x] Refill: advance a known time and exactly the expected number more fit
+- [x] Ceiling: the refill stops at the capacity
+      > Rewritten after a mutation survived the first version. Advancing an hour
+      > also blows past the TTL, so the key expires and the next caller meets a
+      > fresh full bucket through the missing-key branch — the ceiling was never
+      > reached. It now spends two, waits four seconds against a five second
+      > TTL, and checks that three in hand plus four refilled is five, not seven.
+- [x] **Fractional refill**: at half a token per second, one second buys half a
+      token and a cost of 1 is refused; another second buys the rest and it
+      passes. This is the test that fails if the fraction is lost anywhere
+- [x] A caller's first ever request is admitted
+- [x] `n > 1` is rejected when it would overdraw, not silently clamped
+- [x] `RetryAfter` asserted against the exact deficit over rate
+- [x] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
+
+### Against the earlier phases
+
+- [x] A test that records what the others cannot do: the same burst of
+      `capacity` requests that token bucket admits by design is refused by
+      `slidingwindowlog` at an equivalent limit
+      > Both sustain one request per second. A burst of ten arrives: the bucket
+      > admits all ten, the log admits one. Near-identical throughput over a
+      > minute, opposite answers to a caller who saved up.
+
+### HTTP, integration, gate
+
+- [x] `POST /api/limiters/tokenbucket/check` works with no change beyond adding
+      the limiter to the slice in `main.go`
+      > Confirmed, fourth phase running. At the same sustained rate of five per
+      > ten seconds the four answer Retry-After 6 / 10 / 5 / 2 — the bucket
+      > gives the only one a client can act on precisely, because a token at
+      > half a second apiece arrives on a schedule rather than at a boundary.
+- [x] `make test-integration` green, including the fractional case against real
+      Redis rather than miniredis' Lua interpreter
+      > Reads the partial token straight out of the hash rather than inferring
+      > it from a verdict: real Redis held 0.404 of a token between calls.
+      > Mutation-checked — rounding the stored value leaves 0 and the test says
+      > so. Also covers the burst settling to the rate rather than handing the
+      > whole capacity back, and the TTL matching a full refill.
+- [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [x] README comparison table gains a row, including the burst it allows on
+      purpose and the memory that buys
