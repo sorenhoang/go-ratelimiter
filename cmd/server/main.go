@@ -15,6 +15,7 @@ import (
 	"github.com/sorenhoang/go-ratelimiter/internal/httpx"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/fixedwindow"
+	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowcounter"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowlog"
 )
 
@@ -59,7 +60,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	mux := api.New([]limiter.Limiter{fw, swl}, true)
+	swc, err := slidingwindowcounter.New(rdb, slidingwindowcounter.Config{
+		Limit:  limitPerWindow,
+		Window: window,
+	})
+	if err != nil {
+		log.Error("failed to create sliding window counter limiter", "error", err)
+		os.Exit(1)
+	}
+
+	mux := api.New([]limiter.Limiter{fw, swl, swc}, true)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := rdb.Ping(r.Context()).Err(); err != nil {
 			log.Error("redis ping failed", "err", err)

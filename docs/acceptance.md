@@ -171,7 +171,7 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
 ### Contract
 
 - [x] `slidingwindowcounter` asserts conformance at compile time
-- [ ] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
+- [x] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
       Two phases running says the seams hold; a third says it was not luck
 
 ### Algorithm
@@ -223,8 +223,12 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
 
 ### HTTP, integration, gate
 
-- [ ] `POST /api/limiters/slidingwindowcounter/check` works with no change
+- [x] `POST /api/limiters/slidingwindowcounter/check` works with no change
       beyond adding the limiter to the slice in `main.go`
+      > Confirmed: `cmd/server/main.go` was again the only file touched. Live,
+      > the three answer the same seven requests with Reset 6 / 10 / 16 and
+      > Retry-After 6 / 10 / 6 — each one's idea of "wait this long" falling
+      > straight out of how it stores state.
 - [ ] `make test-integration` green against real Redis
 - [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [ ] README comparison table gains a row, including the measured divergence
