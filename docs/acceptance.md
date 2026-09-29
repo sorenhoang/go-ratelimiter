@@ -332,13 +332,19 @@ traffic rather than judging it.
 - [ ] `leakybucket.Meter` asserts conformance to `limiter.Limiter` at compile
       time and mounts with nothing in `internal/limiter` or `internal/httpx`
       changing
-- [ ] One `EVAL` per decision, clock from `redis.call('TIME')`, level leaking
+- [x] One `EVAL` per decision, clock from `redis.call('TIME')`, level leaking
       lazily on read
-- [ ] The level is fractional and survives in Redis, as in phase 04
-- [ ] A test stating the duality with token bucket outright: at a matching
+- [x] The level is fractional and survives in Redis, as in phase 04
+- [x] A test stating the duality with token bucket outright: at a matching
       capacity and rate the two admit the same requests, one counting water in
       and the other tokens left. Writing it down is the point — the symmetry is
       easy to assert and easy to get wrong
+      > Replays a fixed sequence through both and checks Allowed, Remaining and
+      > RetryAfter match at every step — they match exactly, not approximately —
+      > plus the identity itself on the stored state: level + tokens = capacity.
+      > Mutation-checked, and it earned its place: changing one boundary from
+      > `<=` to `<` separates the two by a single request at the full mark, and
+      > the test names the step and the numbers.
 
 ### Queue — pure Go, and where the interface stops
 
