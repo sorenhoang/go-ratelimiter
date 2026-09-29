@@ -157,6 +157,6 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 ### Gate
 
-- [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
-- [ ] README comparison table gains a row for this pattern, including its
+- [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
+- [x] README comparison table gains a row for this pattern, including its
       O(limit) memory cost — the reason production usually picks phase 03 instead

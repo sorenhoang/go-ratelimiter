@@ -8,8 +8,10 @@ This is a learning repository. The goal is not a library to import — it is to 
 each algorithm by hand, hit the real gotchas, and end up with a comparison table
 backed by actual benchmarks.
 
-> **Status: planning.** No code yet. The full build plan lives in
-> [`docs/plan.html`](docs/plan.html).
+> **Status: two of five algorithms built.** Fixed Window Counter and Sliding
+> Window Log both run, behind one interface and one HTTP middleware. The build
+> plan lives in [`docs/plan.html`](docs/plan.html), and what each phase had to
+> prove before it was called done is in [`docs/acceptance.md`](docs/acceptance.md).
 
 ## The algorithms
 
@@ -24,6 +26,33 @@ easiest algorithm.
 | 03 | Sliding Window Counter | Two string counters, weighted | The approximation that ships — Cloudflare runs this |
 | 04 | Token Bucket | Hash `{tokens, last_refill}` | Burst is a feature here, not an accident |
 | 05 | Leaky Bucket | Hash `{level, last_leak}` + a pure-Go queue variant | Smooths traffic; the queue variant is the Go concurrency exercise |
+
+### Measured so far
+
+Filled in as each one lands, from the tests and from live runs rather than from
+the textbook.
+
+| Pattern | Memory per key | Accuracy | The burst it allows | `RetryAfter` |
+|---------|----------------|----------|---------------------|--------------|
+| Fixed Window Counter | O(1) — one integer | Admits up to **2× the limit** around a boundary | Whole quota returns at once when the slot rolls | Exact, but only ever "until this slot ends" |
+| Sliding Window Log | **O(limit)** — one sorted set entry per request | Exact by construction | None; the window moves with the requests | Exact — read off the entry that actually has to expire |
+
+The same 7 requests at `limit=5, window=10s`, nine seconds into a window:
+
+| | `fixedwindow` | `slidingwindowlog` |
+|---|---|---|
+| `RateLimit-Reset` | `1` | `10` |
+| `retry_after` on 429 | `1` | `10` |
+
+Fixed window says "wait one second" because its slot is about to roll and hand
+back the entire allowance. The log says "wait ten" because its oldest entry has
+to age out, and that frees exactly one slot. Both are right about their own
+definition, and `TestAllowN_DeniesTheBurstFixedWindowWouldAllow` pins the
+difference down: one request sequence, opposite verdicts.
+
+That O(limit) row is the catch. At `limit=10000` across a million callers the log
+is an enormous amount of sorted set, which is why production usually reaches for
+the counter approximation in phase 03 instead.
 
 ## Design decisions
 
@@ -52,8 +81,6 @@ docs/plan.html         the full build plan
 
 ## Running it
 
-Planned interface — none of this works yet.
-
 ```bash
 docker compose up -d        # redis:7-alpine
 make run                    # server on :8080
@@ -62,9 +89,17 @@ make test-integration       # against real Redis, behind //go:build integration
 make bench                  # latency and allocations per AllowN
 ```
 
+Fire at a limiter and watch the quota drain:
+
 ```bash
-cd web && npm install && npm run dev
+for i in $(seq 1 7); do curl -s -X POST localhost:8080/api/limiters/fixedwindow/check; echo; done
 ```
+
+Swap `fixedwindow` for `slidingwindowlog` to see the same requests answered
+differently. `POST /api/limiters/{name}/reset` clears a counter so you need not
+wait out a window.
+
+The React harness is phase 06 and does not exist yet.
 
 ## Testing
 
@@ -80,8 +115,8 @@ under a threshold. That number is the whole point of the approximation.
 ## Progress
 
 - [x] **00** Scaffold — go.mod, docker-compose, Makefile, golangci-lint
-- [ ] **01** `Limiter` interface + Fixed Window + middleware + first tests
-- [ ] **02** Sliding Window Log
+- [x] **01** `Limiter` interface + Fixed Window + middleware + first tests
+- [x] **02** Sliding Window Log
 - [ ] **03** Sliding Window Counter + divergence test
 - [ ] **04** Token Bucket
 - [ ] **05** Leaky Bucket — Redis meter + pure-Go queue
