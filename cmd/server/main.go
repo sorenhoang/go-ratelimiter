@@ -12,11 +12,17 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/sorenhoang/go-ratelimiter/internal/api"
+	"github.com/sorenhoang/go-ratelimiter/internal/httpx"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/fixedwindow"
+	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowlog"
 )
 
 const shutdownTimeout = 10 * time.Second
+
+type healthResponse struct {
+	Status string `json:"status"`
+}
 
 const (
 	limitPerWindow = 5
@@ -29,33 +35,41 @@ func main() {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: env("REDIS_ADDR", "localhost:6379"),
 	})
-
-	fw, err := fixedwindow.New(rdb, fixedwindow.Config{
-		Limit:  limitPerWindow,
-		Window: window,
-	})
-
-	if err != nil {
-		log.Error("failed to create fixed window limiter", "error", err)
-		os.Exit(1)
-	}
-
 	defer func() {
 		if err := rdb.Close(); err != nil {
 			log.Error("failed to close redis client", "error", err)
 		}
 	}()
 
-	mux := api.New([]limiter.Limiter{fw}, true)
+	fw, err := fixedwindow.New(rdb, fixedwindow.Config{
+		Limit:  limitPerWindow,
+		Window: window,
+	})
+	if err != nil {
+		log.Error("failed to create fixed window limiter", "error", err)
+		os.Exit(1)
+	}
+
+	swl, err := slidingwindowlog.New(rdb, slidingwindowlog.Config{
+		Limit:  limitPerWindow,
+		Window: window,
+	})
+	if err != nil {
+		log.Error("failed to create sliding window log limiter", "error", err)
+		os.Exit(1)
+	}
+
+	mux := api.New([]limiter.Limiter{fw, swl}, true)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := rdb.Ping(r.Context()).Err(); err != nil {
 			log.Error("redis ping failed", "err", err)
-			http.Error(w, `{"status":"redis unreachable"}`, http.StatusServiceUnavailable)
+			httpx.WriteJSON(w, http.StatusServiceUnavailable, httpx.ErrorBody{
+				Error: "redis unreachable",
+			})
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"ok"}`))
+		httpx.WriteJSON(w, http.StatusOK, healthResponse{Status: "ok"})
 	})
 
 	srv := &http.Server{

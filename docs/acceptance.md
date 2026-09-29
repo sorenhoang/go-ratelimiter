@@ -104,7 +104,7 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 - [x] `slidingwindowlog` asserts conformance at compile time:
       `var _ limiter.Limiter = (*Limiter)(nil)`
-- [ ] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
+- [x] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
       A second algorithm dropping in without touching the abstraction is the proof
       that phase 01 drew the seams in the right place. If any of those files needs
       an edit, say why rather than quietly making it
@@ -139,8 +139,12 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 ### HTTP
 
-- [ ] `POST /api/limiters/slidingwindowlog/check` works with no middleware or
+- [x] `POST /api/limiters/slidingwindowlog/check` works with no middleware or
       router changes beyond adding the limiter to the slice in `main.go`
+      > Confirmed: `cmd/server/main.go` was the only file touched. Live, the two
+      > limiters answer the same 7 requests with Reset 1 vs 10 and retry_after
+      > 1 vs 10 — fixed window returns the whole quota when its slot rolls,
+      > the log frees one entry at a time.
 
 ### Integration (real Redis)
 
