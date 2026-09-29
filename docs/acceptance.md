@@ -317,3 +317,60 @@ whose state is fractional.
 - [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [x] README comparison table gains a row, including the burst it allows on
       purpose and the memory that buys
+
+---
+
+## Phase 05 — Leaky Bucket
+
+Two variants, and they answer different questions. `Meter` refuses what
+overflows, like everything before it. `Queue` makes the caller wait instead —
+which is the original leaky bucket, and the only thing in this repo that shapes
+traffic rather than judging it.
+
+### Meter — Redis, same shape as the rest
+
+- [ ] `leakybucket.Meter` asserts conformance to `limiter.Limiter` at compile
+      time and mounts with nothing in `internal/limiter` or `internal/httpx`
+      changing
+- [ ] One `EVAL` per decision, clock from `redis.call('TIME')`, level leaking
+      lazily on read
+- [ ] The level is fractional and survives in Redis, as in phase 04
+- [ ] A test stating the duality with token bucket outright: at a matching
+      capacity and rate the two admit the same requests, one counting water in
+      and the other tokens left. Writing it down is the point — the symmetry is
+      easy to assert and easy to get wrong
+
+### Queue — pure Go, and where the interface stops
+
+- [ ] `Queue` deliberately does **not** implement `limiter.Limiter`, and the
+      code says why. `AllowN` answers now; `Wait` blocks until the caller's
+      turn. Bending one into the other would hide the difference that makes
+      this variant worth having
+- [ ] `Wait(ctx)` returns when the caller's turn comes, `ErrQueueFull` at once
+      when there is no room, and `ctx.Err()` if the caller gives up first
+- [ ] A cancelled caller releases its place immediately rather than holding it
+      until its turn arrives
+- [ ] `Close()` drains, stops the ticker, and is safe to call while callers are
+      waiting — no panic, no send on a closed channel
+- [ ] **`go.uber.org/goleak` in `TestMain`.** This is the only package in the
+      repo that starts goroutines of its own, so it is the only one that can
+      leak them
+- [ ] `go test -race` clean, and the race detector actually exercised by a test
+      that runs concurrent callers
+- [ ] Timing is asserted as spacing, not as total duration: twenty callers
+      through a ten per second queue must come out *evenly*, which is the
+      property that makes this traffic shaping rather than rate limiting
+
+### HTTP
+
+- [ ] Meter mounts through the existing route builder with no change
+- [ ] **`internal/api` does change**, to give the queue a route of its own, and
+      the reason is recorded rather than the streak being protected. A handler
+      that waits is not a handler that decides, and the middleware contract
+      does not cover it
+
+### Gate
+
+- [ ] `make test-integration` green against real Redis for the meter
+- [ ] `go vet`, `gofmt`, `make test`, `make lint`, `go test -race` all clean
+- [ ] README gains both rows, and says plainly which of the five to reach for
