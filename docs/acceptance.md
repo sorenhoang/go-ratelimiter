@@ -307,8 +307,13 @@ whose state is fractional.
       > ten seconds the four answer Retry-After 6 / 10 / 5 / 2 — the bucket
       > gives the only one a client can act on precisely, because a token at
       > half a second apiece arrives on a schedule rather than at a boundary.
-- [ ] `make test-integration` green, including the fractional case against real
+- [x] `make test-integration` green, including the fractional case against real
       Redis rather than miniredis' Lua interpreter
+      > Reads the partial token straight out of the hash rather than inferring
+      > it from a verdict: real Redis held 0.404 of a token between calls.
+      > Mutation-checked — rounding the stored value leaves 0 and the test says
+      > so. Also covers the burst settling to the rate rather than handing the
+      > whole capacity back, and the TTL matching a full refill.
 - [ ] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [ ] README comparison table gains a row, including the burst it allows on
       purpose and the memory that buys
