@@ -102,7 +102,7 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 ### Contract
 
-- [ ] `slidingwindowlog` asserts conformance at compile time:
+- [x] `slidingwindowlog` asserts conformance at compile time:
       `var _ limiter.Limiter = (*Limiter)(nil)`
 - [ ] **Nothing in `internal/limiter`, `internal/httpx` or `internal/api` changes.**
       A second algorithm dropping in without touching the abstraction is the proof
@@ -111,28 +111,31 @@ replaced `http.Error`, and `golangci-lint` 2.14.0 is installed and green.
 
 ### Algorithm
 
-- [ ] One `EVAL` per decision, clock from `redis.call('TIME')`
-- [ ] Sorted set members are unique per request. Using the timestamp as the member
+- [x] One `EVAL` per decision, clock from `redis.call('TIME')`
+- [x] Sorted set members are unique per request. Using the timestamp as the member
       makes two requests in the same millisecond overwrite each other, the count
       runs low, and traffic leaks past the limit
-- [ ] The key carries a TTL, so a caller that goes quiet stops costing memory
-- [ ] `RetryAfter` is derived from the entry that actually has to expire, not
+- [x] The key carries a TTL, so a caller that goes quiet stops costing memory
+- [x] `RetryAfter` is derived from the entry that actually has to expire, not
       approximated — this algorithm knows the answer exactly, unlike phase 03
 
 ### Unit tests (miniredis)
 
-- [ ] `limit=5` → five allowed, sixth denied
-- [ ] **Slides, not steps**: after the window has half passed, quota frees one
+- [x] `limit=5` → five allowed, sixth denied
+- [x] **Slides, not steps**: after the window has half passed, quota frees one
       request at a time rather than all at once. This is the behaviour fixed window
       cannot produce
-- [ ] **Contrast test**: the exact scenario from
+- [x] **Contrast test**: the exact scenario from
       `TestAllowN_AllowsDoubleLimitAcrossWindowBoundary` — five requests at the end
       of a window, five just after — is **denied** here. Same input, opposite
       verdict, and the reason this algorithm is in the repo
-- [ ] Two requests inside the same millisecond are both counted
-- [ ] `n > 1` is rejected when it would cross the limit, not silently clamped
-- [ ] `Remaining`, `ResetAfter` and `RetryAfter` asserted against exact values
-- [ ] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
+- [x] Two requests inside the same millisecond are both counted
+      > Asserted through the denial of the next request, not through `Remaining`:
+      > that number is arithmetic on the count read before the write, so it reads
+      > correctly even when two entries collide. Mutation-checked.
+- [x] `n > 1` is rejected when it would cross the limit, not silently clamped
+- [x] `Remaining`, `ResetAfter` and `RetryAfter` asserted against exact values
+- [x] Redis down → `ErrBackendUnavailable`, for both `AllowN` and `Reset`
 
 ### HTTP
 
