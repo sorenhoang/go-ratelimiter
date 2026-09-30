@@ -38,6 +38,7 @@ func TestDuality_MeterMatchesTokenBucket(t *testing.T) {
 	s.SetTime(baseTime)
 
 	rdb := redis.NewClient(&redis.Options{Addr: s.Addr(), MaxRetries: -1})
+	t.Cleanup(func() { _ = rdb.Close() })
 	ctx := context.Background()
 
 	meter, err := leakybucket.NewMeter(rdb, leakybucket.MeterConfig{

@@ -348,24 +348,33 @@ traffic rather than judging it.
 
 ### Queue — pure Go, and where the interface stops
 
-- [ ] `Queue` deliberately does **not** implement `limiter.Limiter`, and the
+- [x] `Queue` deliberately does **not** implement `limiter.Limiter`, and the
       code says why. `AllowN` answers now; `Wait` blocks until the caller's
       turn. Bending one into the other would hide the difference that makes
       this variant worth having
-- [ ] `Wait(ctx)` returns when the caller's turn comes, `ErrQueueFull` at once
+- [x] `Wait(ctx)` returns when the caller's turn comes, `ErrQueueFull` at once
       when there is no room, and `ctx.Err()` if the caller gives up first
-- [ ] A cancelled caller releases its place immediately rather than holding it
+- [x] A cancelled caller releases its place immediately rather than holding it
       until its turn arrives
-- [ ] `Close()` drains, stops the ticker, and is safe to call while callers are
+- [x] `Close()` drains, stops the ticker, and is safe to call while callers are
       waiting — no panic, no send on a closed channel
-- [ ] **`go.uber.org/goleak` in `TestMain`.** This is the only package in the
+- [x] **`go.uber.org/goleak` in `TestMain`.** This is the only package in the
       repo that starts goroutines of its own, so it is the only one that can
       leak them
-- [ ] `go test -race` clean, and the race detector actually exercised by a test
+      > Mutation-checked, and it named the culprit: a Close that returns without
+      > stopping the worker is reported as a leak in `(*Queue).run`. Worth
+      > noting that omitting only `close(q.done)` deadlocks instead, because
+      > `worker.Wait()` then never returns — louder than a leak, and caught
+      > sooner.
+- [x] `go test -race` clean, and the race detector actually exercised by a test
       that runs concurrent callers
-- [ ] Timing is asserted as spacing, not as total duration: twenty callers
+- [x] Timing is asserted as spacing, not as total duration: twenty callers
       through a ten per second queue must come out *evenly*, which is the
       property that makes this traffic shaping rather than rate limiting
+      > Eight gaps against a 20ms interval came out 19.2–20.7ms. A separate test
+      > covers the other half of the same property: after five idle intervals,
+      > three releases still take three intervals rather than returning at once.
+      > Buffering the permit channel makes that one fail in 65µs.
 
 ### HTTP
 

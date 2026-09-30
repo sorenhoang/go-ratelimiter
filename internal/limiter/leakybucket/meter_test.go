@@ -32,6 +32,8 @@ func newTestMeter(t *testing.T, cfg leakybucket.MeterConfig) (*miniredis.Minired
 		MaxRetries: -1,
 	})
 
+	t.Cleanup(func() { _ = rdb.Close() })
+
 	s.SetTime(baseTime)
 	m, err := leakybucket.NewMeter(rdb, cfg)
 	if err != nil {
