@@ -1,3 +1,11 @@
+// Package api mounts the limiters and the queue on one mux.
+//
+// The two are mounted by different routes on purpose. Everything New mounts
+// goes behind the rate limit middleware, which asks for a verdict and either
+// calls the handler or writes 429. A queue has no verdict to give -- it waits,
+// then lets the caller through -- so MountQueue gives it a route of its own
+// rather than forcing a limiter whose AllowN blocks or a middleware that
+// sometimes waits.
 package api
 
 import (

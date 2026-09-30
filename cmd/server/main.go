@@ -1,3 +1,12 @@
+// Command server runs every limiter in this repo behind one HTTP API.
+//
+// All of them are configured to the same sustained rate -- five per ten seconds
+// -- so a client firing the same traffic at each sees only the difference in
+// how each one decides, which is what the harness in web/ draws.
+//
+// Nothing here is configurable at runtime. Rebuilding a limiter under live
+// traffic would need locking for no gain, and a comparison is cleaner when the
+// six share one setting anyway.
 package main
 
 import (
