@@ -414,15 +414,19 @@ algorithms stop needing to be explained.
 
 ### Decisions taken before the code
 
-- [ ] **Vite's dev proxy, not CORS.** `server.proxy` forwards `/api` to :8080,
+- [x] **Vite's dev proxy, not CORS.** `server.proxy` forwards `/api` to :8080,
       so the browser sees one origin and the Go server needs no CORS middleware
       and no change at all. Recorded because reaching for a CORS header is the
       obvious move and the wrong one here
-- [ ] **No runtime config editing.** The plan wanted `PUT /config`; it is
+      > Verified through the proxy rather than assumed: `GET :5173/api/limiters`
+      > returns the five, and `POST :5173/api/limiters/fixedwindow/check` comes
+      > back 200 with `application/json` and `RateLimit-Limit: 5`. The Go side
+      > is untouched.
+- [x] **No runtime config editing.** The plan wanted `PUT /config`; it is
       deferred. Mutable limiters need locking or rebuilding, and the comparison
       is *cleaner* when all six share one setting anyway. Say so rather than
       leaving a gap
-- [ ] **No full design pipeline.** A handful of CSS variables, not a design
+- [x] **No full design pipeline.** A handful of CSS variables, not a design
       system. This is a developer's instrument, and pretending otherwise would
       cost more than it returns — noted so the shortcut is a decision, not an
       omission
@@ -443,9 +447,12 @@ algorithms stop needing to be explained.
 
 ### The harness
 
-- [ ] Vite + React + TypeScript, `npm run build` clean with no unused symbols —
+- [x] Vite + React + TypeScript, `npm run build` clean with no unused symbols —
       `tsc -b` is the gate the plan asked for
-- [ ] One tab per limiter, plus a `Compare` tab
+- [x] One tab per limiter, plus a `Compare` tab
+      > Driven by the API, not a hardcoded list, so a limiter added in main.go
+      > appears here without the harness knowing about it. The panels behind
+      > the tabs arrive in the next steps.
 - [ ] Traffic generator with three modes: a single request, a burst of N fired
       together, and a sustained X per second for Y seconds
 - [ ] **The generator's actual rate is tested**, not assumed. If it claims ten
