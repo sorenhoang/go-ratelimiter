@@ -511,6 +511,6 @@ algorithms stop needing to be explained.
 
 ### Gate
 
-- [ ] `npm run build` and `npm run test` clean
-- [ ] Go side still clean: `go vet`, `gofmt`, `make test`, `make lint`
-- [ ] README says how to run both halves
+- [x] `npm run build` and `npm run test` clean
+- [x] Go side still clean: `go vet`, `gofmt`, `make test`, `make lint`
+- [x] README says how to run both halves

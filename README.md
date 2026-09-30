@@ -8,9 +8,10 @@ This is a learning repository. The goal is not a library to import — it is to 
 each algorithm by hand, hit the real gotchas, and end up with a comparison table
 backed by actual benchmarks.
 
-> **Status: all five algorithms built.** Four of them share one interface and
-> one HTTP middleware; the fifth is where that stops, and it says so. The React
-> harness is what remains. The build
+> **Status: five algorithms, six implementations, and a harness that fires one
+> traffic pattern at all of them and draws the answers on one axis. What is left
+> is benchmarking: the comparison below is written from tests and live runs, not
+> from measured latency. The build
 > plan lives in [`docs/plan.html`](docs/plan.html), and what each phase had to
 > prove before it was called done is in [`docs/acceptance.md`](docs/acceptance.md).
 
@@ -172,7 +173,39 @@ Swap `fixedwindow` for `slidingwindowlog` to see the same requests answered
 differently. `POST /api/limiters/{name}/reset` clears a counter so you need not
 wait out a window.
 
-The React harness is phase 06 and does not exist yet.
+### The harness
+
+With the server running, in another terminal:
+
+```bash
+cd web && npm install && npm run dev
+```
+
+Then open http://localhost:5173. Vite forwards `/api` to the Go server, so
+there is no CORS to configure and the server needs no development mode.
+
+One tab per limiter, and a **Compare** tab that fires a single traffic pattern
+at all six at once and stacks the timelines on a shared axis. Four requests a
+second for five seconds looks like this:
+
+| | allowed / refused |
+|---|---|
+| Fixed Window Counter | 10 / 10 — in two blocks, because the whole quota returns at once when the slot rolls |
+| Sliding Window Log | 5 / 15 — five, then nothing until the first of them ages out |
+| Sliding Window Counter | 7 / 13 — between the two, which is what an approximation should look like |
+| Token Bucket | 8 / 12 |
+| Leaky Bucket — meter | 8 / 12 — the same row twice, which is the duality made visible |
+| Leaky Bucket — queue | 20 / 0, and the last caller waited 5.0s |
+
+The last row is drawn differently on purpose. The queue refuses nothing until
+it is full; it makes callers wait, so its marks carry a bar for the wait and its
+headline number is the longest one rather than a count of refusals.
+
+```bash
+cd web && npm run build    # tsc -b, which fails on an unused symbol
+cd web && npm run test     # the traffic scheduler
+cd web && npm run lint
+```
 
 ## Testing
 
@@ -193,5 +226,6 @@ under a threshold. That number is the whole point of the approximation.
 - [x] **03** Sliding Window Counter + divergence test
 - [x] **04** Token Bucket
 - [x] **05** Leaky Bucket — Redis meter + pure-Go queue
-- [ ] **06** React harness with the Compare tab
-- [ ] **07** Benchmarks + comparison table
+- [x] **06** React harness with the Compare tab
+- [ ] **07** Benchmarks — the comparison table is written from tests and live
+      runs; per-call latency and allocations are not measured yet
