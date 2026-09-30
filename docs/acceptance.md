@@ -465,8 +465,18 @@ algorithms stop needing to be explained.
       > response time — `expected 99.7 to be less than 80`. Planning offsets as
       > gaps rather than from the start turns `[0, 250, 500, 750]` into
       > `[250, 250, 250, 250]`, which is the drift a long run would accumulate.
-- [ ] Timeline chart: one mark per request against a time axis, allowed and
+- [x] Timeline chart: one mark per request against a time axis, allowed and
       refused distinguishable without relying on colour alone
+      > A filled circle against a cross, so the two are told apart by shape
+      > before colour. Hand-drawn SVG rather than a chart library: the shape
+      > distinction is the requirement, and a scatter plot makes it awkward.
+      >
+      > The first version was unreadable and the browser showed it. A fixed
+      > one-second axis stacked an entire burst on the origin, and "rate
+      > achieved" divided ten requests by half a millisecond to report
+      > 18000/s — arithmetically true, useless. The axis now spans the data and
+      > picks a round tick, and the rate only appears for a sustained run where
+      > it answers something.
 - [ ] `Compare` fires one traffic pattern at all six and stacks the timelines on
       a shared time axis. Fixed Window's doubled burst, Token Bucket's opening
       burst and the Queue's even spacing have to be visible without reading a
@@ -474,11 +484,15 @@ algorithms stop needing to be explained.
 
 ### The queue is not like the others
 
-- [ ] The five limiters answer allowed-or-refused; the queue answers *how long
+- [x] The five limiters answer allowed-or-refused; the queue answers *how long
       you waited*. The harness shows that difference rather than flattening it
       into the same mark — a queued request that succeeded after 4s is not the
       same event as one allowed instantly, and a chart that draws them alike is
       lying about the algorithm
+      > A bar for the wait with the mark at its end, and a different headline
+      > number: longest wait rather than refusals. A burst of ten at two a
+      > second gives 10 allowed, 0 refused, 4.92s for the last one — where
+      > fixedwindow answers the same burst with five crosses.
 
 ### Gate
 

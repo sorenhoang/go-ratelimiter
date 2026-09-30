@@ -1,27 +1,33 @@
 import { useEffect, useState } from 'react'
-import { fetchLimiters, type LimiterInfo } from './api'
 import './App.css'
+import { fetchLimiters, type LimiterInfo } from './api'
+import { LimiterPanel } from './LimiterPanel'
 
-/** The queue is a tab like the others but not a limiter, so it carries no info. */
 const QUEUE_TAB = 'queue'
 const COMPARE_TAB = 'compare'
 
 export default function App() {
   const [limiters, setLimiters] = useState<LimiterInfo[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<string>(COMPARE_TAB)
+  const [tab, setTab] = useState<string>(QUEUE_TAB)
 
   useEffect(() => {
     fetchLimiters()
       .then((list) => {
         setLimiters(list)
         setError(null)
+        if (list.length > 0) {
+          setTab(list[0].name)
+        }
       })
       .catch((err: unknown) => {
         setLimiters([])
         setError(err instanceof Error ? err.message : String(err))
       })
   }, [])
+
+  const tabs = [...limiters.map((l) => l.name), QUEUE_TAB, COMPARE_TAB]
+  const selected = limiters.find((l) => l.name === tab)
 
   return (
     <div className="app">
@@ -41,41 +47,31 @@ export default function App() {
       )}
 
       <nav className="tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === COMPARE_TAB}
-          className={tab === COMPARE_TAB ? 'tab on' : 'tab'}
-          onClick={() => setTab(COMPARE_TAB)}
-        >
-          Compare
-        </button>
-        {limiters.map((l) => (
+        {tabs.map((name) => (
           <button
-            key={l.name}
+            key={name}
             role="tab"
-            aria-selected={tab === l.name}
-            className={tab === l.name ? 'tab on' : 'tab'}
-            onClick={() => setTab(l.name)}
+            aria-selected={tab === name}
+            className={tab === name ? 'tab on' : 'tab'}
+            onClick={() => setTab(name)}
           >
-            {l.name}
+            {name}
           </button>
         ))}
-        <button
-          role="tab"
-          aria-selected={tab === QUEUE_TAB}
-          className={tab === QUEUE_TAB ? 'tab on' : 'tab'}
-          onClick={() => setTab(QUEUE_TAB)}
-        >
-          queue
-        </button>
       </nav>
 
       <main className="panel">
-        <p className="todo">
-          <code>{tab}</code> — the traffic generator and the timeline arrive in the
-          next steps. The tabs above came from <code>GET /api/limiters</code>, so
-          the proxy and the endpoint are both working.
-        </p>
+        {tab === COMPARE_TAB ? (
+          <p className="note">
+            Firing one pattern at all six and stacking the timelines arrives in the
+            next step. It is the point of the whole harness: the same requests, six
+            different answers, on one axis.
+          </p>
+        ) : (
+          // Keyed by tab, so switching tabs starts a clean panel instead of
+          // showing one limiter's marks under another's name.
+          <LimiterPanel key={tab} limiter={selected} />
+        )}
       </main>
     </div>
   )
