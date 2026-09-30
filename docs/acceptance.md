@@ -429,9 +429,17 @@ algorithms stop needing to be explained.
 
 ### Backend
 
-- [ ] `GET /api/limiters` returns what is actually mounted, so the harness does
-      not hardcode six names that can drift out of step with `main.go`
-- [ ] Nothing else in the Go code changes
+- [x] `GET /api/limiters` returns what is actually mounted, so the harness does
+      not hardcode names that can drift out of step with `main.go`
+      > Built from the same loop that mounts the routes, so the list cannot
+      > disagree with what is served. It carries no configured limit: the
+      > Limiter interface does not expose one, and a client learns the real
+      > limit from the RateLimit-Limit header on its first request — what the
+      > server enforces rather than what a config claims.
+      >
+      > It returns five, not six. The queue is not a Limiter, so it is not in
+      > the list; the harness reaches it at its own fixed route.
+- [x] Nothing else in the Go code changes
 
 ### The harness
 

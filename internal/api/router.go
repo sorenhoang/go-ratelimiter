@@ -17,6 +17,16 @@ type resetResponse struct {
 	Key    string `json:"key"`
 }
 
+type limiterInfo struct {
+	Name     string `json:"name"`
+	CheckURL string `json:"check_url"`
+	ResetURL string `json:"reset_url"`
+}
+
+type limitersResponse struct {
+	Limiters []limiterInfo `json:"limiters"`
+}
+
 // New builds the API mux, mounting two routes for each limiter.
 //
 // Routes are registered per limiter rather than behind a {pattern} wildcard.
@@ -29,6 +39,7 @@ type resetResponse struct {
 // a health endpoint, on the same tree.
 func New(limiters []limiter.Limiter, failOpen bool) *http.ServeMux {
 	mux := http.NewServeMux()
+	info := make([]limiterInfo, 0, len(limiters))
 
 	for _, l := range limiters {
 		cfg := httpx.Config{
@@ -42,9 +53,33 @@ func New(limiters []limiter.Limiter, failOpen bool) *http.ServeMux {
 		// Deliberately not rate limited: a reset you cannot reach once you have
 		// hit the limit is no use for the thing it exists to do.
 		mux.Handle("POST "+base+"/reset", resetHandler(l))
+
+		info = append(info, limiterInfo{
+			Name:     l.Name(),
+			CheckURL: base + "/check",
+			ResetURL: base + "/reset",
+		})
 	}
 
+	// Built from the same loop that mounts the routes, so a client discovers
+	// what is actually served rather than a list that can drift out of step
+	// with it.
+	mux.Handle("GET /api/limiters", listHandler(info))
+
 	return mux
+}
+
+// listHandler reports the mounted limiters.
+//
+// It carries no configured limit, deliberately. The Limiter interface does not
+// expose one, and adding a method for this single caller would be the wrong
+// trade -- a client learns the real limit from the RateLimit-Limit header on
+// its first request, which is what the server actually enforces rather than
+// what a config claims.
+func listHandler(info []limiterInfo) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		httpx.WriteJSON(w, http.StatusOK, limitersResponse{Limiters: info})
+	})
 }
 
 // checkHandler is the protected endpoint. Reaching it means the limiter let the
