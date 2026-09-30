@@ -8,10 +8,9 @@ This is a learning repository. The goal is not a library to import — it is to 
 each algorithm by hand, hit the real gotchas, and end up with a comparison table
 backed by actual benchmarks.
 
-> **Status: five algorithms, six implementations, and a harness that fires one
-> traffic pattern at all of them and draws the answers on one axis. What is left
-> is benchmarking: the comparison below is written from tests and live runs, not
-> from measured latency. The build
+> **Status: complete.** Five algorithms, six implementations, a harness that
+> fires one traffic pattern at all of them and draws the answers on one axis,
+> and measurements for the two columns that decide between them. The build
 > plan lives in [`docs/plan.html`](docs/plan.html), and what each phase had to
 > prove before it was called done is in [`docs/acceptance.md`](docs/acceptance.md).
 
@@ -81,6 +80,32 @@ It errs **strict**: 113 refusals the log would have admitted against 93
 admissions it would have refused. The approximation is conservative rather than
 a hole to drive through, which is what makes trading phase 02's O(limit) memory
 for it a question of user experience rather than of security.
+
+### What a decision costs
+
+`make bench` against a local Redis, and `TestMemoryPerKey` asking Redis what one
+busy caller occupies after 2000 requests:
+
+| | ns per decision | allocs | bytes in Redis, per key |
+|---|---|---|---|
+| *a round trip doing nothing* | *135,136* | *6* | — |
+| Fixed Window Counter | 145,526 | 18 | **72** |
+| Sliding Window Log | 151,112 | 20 | **196,392** |
+| Sliding Window Counter | 149,998 | 18 | **72** |
+| Token Bucket | 141,068 | 18 | **112** |
+| Leaky Bucket — meter | 147,556 | 18 | **104** |
+
+Two things fall out of that, and the second is the useful one.
+
+**Nobody here is slow.** The round trip is 135µs and the scripts add six to
+sixteen on top of it. Between the limiters the spread is about 10µs against a
+run-to-run variance of 6µs on a single benchmark, so the ordering above is
+suggestive at best and not something to choose on.
+
+**The log costs 2700× the memory, and nothing else.** It is not slower — sorted
+set operations are logarithmic and the set had to reach 2000 entries before the
+number above was taken. The entire price of being exact is the last column.
+That is the trade, stated in bytes: one caller, one key, 196KB against 72.
 
 ### Which one to reach for
 
@@ -227,5 +252,4 @@ under a threshold. That number is the whole point of the approximation.
 - [x] **04** Token Bucket
 - [x] **05** Leaky Bucket — Redis meter + pure-Go queue
 - [x] **06** React harness with the Compare tab
-- [ ] **07** Benchmarks — the comparison table is written from tests and live
-      runs; per-call latency and allocations are not measured yet
+- [x] **07** Benchmarks — latency, allocations, and bytes in Redis per key
