@@ -317,3 +317,89 @@ whose state is fractional.
 - [x] `go vet`, `gofmt`, `make test`, `make lint` all clean
 - [x] README comparison table gains a row, including the burst it allows on
       purpose and the memory that buys
+
+---
+
+## Phase 05 — Leaky Bucket
+
+Two variants, and they answer different questions. `Meter` refuses what
+overflows, like everything before it. `Queue` makes the caller wait instead —
+which is the original leaky bucket, and the only thing in this repo that shapes
+traffic rather than judging it.
+
+### Meter — Redis, same shape as the rest
+
+- [x] `leakybucket.Meter` asserts conformance to `limiter.Limiter` at compile
+      time and mounts with nothing in `internal/limiter` or `internal/httpx`
+      changing
+- [x] One `EVAL` per decision, clock from `redis.call('TIME')`, level leaking
+      lazily on read
+- [x] The level is fractional and survives in Redis, as in phase 04
+- [x] A test stating the duality with token bucket outright: at a matching
+      capacity and rate the two admit the same requests, one counting water in
+      and the other tokens left. Writing it down is the point — the symmetry is
+      easy to assert and easy to get wrong
+      > Replays a fixed sequence through both and checks Allowed, Remaining and
+      > RetryAfter match at every step — they match exactly, not approximately —
+      > plus the identity itself on the stored state: level + tokens = capacity.
+      > Mutation-checked, and it earned its place: changing one boundary from
+      > `<=` to `<` separates the two by a single request at the full mark, and
+      > the test names the step and the numbers.
+
+### Queue — pure Go, and where the interface stops
+
+- [x] `Queue` deliberately does **not** implement `limiter.Limiter`, and the
+      code says why. `AllowN` answers now; `Wait` blocks until the caller's
+      turn. Bending one into the other would hide the difference that makes
+      this variant worth having
+- [x] `Wait(ctx)` returns when the caller's turn comes, `ErrQueueFull` at once
+      when there is no room, and `ctx.Err()` if the caller gives up first
+- [x] A cancelled caller releases its place immediately rather than holding it
+      until its turn arrives
+- [x] `Close()` drains, stops the ticker, and is safe to call while callers are
+      waiting — no panic, no send on a closed channel
+- [x] **`go.uber.org/goleak` in `TestMain`.** This is the only package in the
+      repo that starts goroutines of its own, so it is the only one that can
+      leak them
+      > Mutation-checked, and it named the culprit: a Close that returns without
+      > stopping the worker is reported as a leak in `(*Queue).run`. Worth
+      > noting that omitting only `close(q.done)` deadlocks instead, because
+      > `worker.Wait()` then never returns — louder than a leak, and caught
+      > sooner.
+- [x] `go test -race` clean, and the race detector actually exercised by a test
+      that runs concurrent callers
+- [x] Timing is asserted as spacing, not as total duration: twenty callers
+      through a ten per second queue must come out *evenly*, which is the
+      property that makes this traffic shaping rather than rate limiting
+      > Eight gaps against a 20ms interval came out 19.2–20.7ms. A separate test
+      > covers the other half of the same property: after five idle intervals,
+      > three releases still take three intervals rather than returning at once.
+      > Buffering the permit channel makes that one fail in 65µs.
+
+### HTTP
+
+- [x] Meter mounts through the existing route builder with no change
+- [x] **`internal/api` does change**, to give the queue a route of its own, and
+      the reason is recorded rather than the streak being protected. A handler
+      that waits is not a handler that decides, and the middleware contract
+      does not cover it
+      > Lighter than expected: `router.go` was not touched at all. The queue got
+      > an additive `MountQueue` in a new file, so `api.New` keeps its signature
+      > and the two kinds of thing mount by two different routes — which reads
+      > better than a shared entry point would have.
+      >
+      > Live: 25 callers against a capacity of 20 at two releases a second gave
+      > 20 × 200 and 5 × 429, the refusals arriving in 0.55ms and the last
+      > release at 9.95s. A client that hangs up mid-wait logs no superfluous
+      > WriteHeader, so the silent branch is doing its job.
+
+### Gate
+
+- [x] `make test-integration` green against real Redis for the meter
+      > Reads the partial unit out of the hash — real Redis held 0.592 of one
+      > between calls — and replays the duality against the token bucket on the
+      > server that actually runs the scripts, with a tolerance rather than
+      > exactness since the two now run a moment apart on a real clock.
+      > The queue needs no integration suite: there is no Redis in it.
+- [x] `go vet`, `gofmt`, `make test`, `make lint`, `go test -race` all clean
+- [x] README gains both rows, and says plainly which of the five to reach for
