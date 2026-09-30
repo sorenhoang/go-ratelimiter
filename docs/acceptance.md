@@ -477,10 +477,25 @@ algorithms stop needing to be explained.
       > 18000/s — arithmetically true, useless. The axis now spans the data and
       > picks a round tick, and the rate only appears for a sustained run where
       > it answers something.
-- [ ] `Compare` fires one traffic pattern at all six and stacks the timelines on
+- [x] `Compare` fires one traffic pattern at all six and stacks the timelines on
       a shared time axis. Fixed Window's doubled burst, Token Bucket's opening
       burst and the Queue's even spacing have to be visible without reading a
       number
+      > Four requests a second for five seconds, all six at once, limiters reset
+      > first so none starts part way through its own quota:
+      >
+      > | | allowed / refused |
+      > |---|---|
+      > | fixedwindow | 10 / 10 — two blocks of green, two of red |
+      > | slidingwindowlog | 5 / 15 — five, then nothing |
+      > | slidingwindowcounter | 7 / 13 — between the two, as the approximation should be |
+      > | tokenbucket | 8 / 12 |
+      > | leakybucket | 8 / 12 — the same row, twice |
+      > | queue | 20 / 0, last caller waited 5.0s |
+      >
+      > The duality proved by test in phase 05 is now visible: token bucket and
+      > the leaky bucket meter draw the same picture. And the queue answers a
+      > different question entirely — nothing refused, someone waited.
 
 ### The queue is not like the others
 

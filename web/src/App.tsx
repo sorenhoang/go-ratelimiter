@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import { fetchLimiters, type LimiterInfo } from './api'
+import { ComparePanel } from './ComparePanel'
 import { LimiterPanel } from './LimiterPanel'
 
 const QUEUE_TAB = 'queue'
@@ -62,11 +63,7 @@ export default function App() {
 
       <main className="panel">
         {tab === COMPARE_TAB ? (
-          <p className="note">
-            Firing one pattern at all six and stacking the timelines arrives in the
-            next step. It is the point of the whole harness: the same requests, six
-            different answers, on one axis.
-          </p>
+          <ComparePanel limiters={limiters} />
         ) : (
           // Keyed by tab, so switching tabs starts a clean panel instead of
           // showing one limiter's marks under another's name.
