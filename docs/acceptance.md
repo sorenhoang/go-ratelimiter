@@ -403,3 +403,63 @@ traffic rather than judging it.
       > The queue needs no integration suite: there is no Redis in it.
 - [x] `go vet`, `gofmt`, `make test`, `make lint`, `go test -race` all clean
 - [x] README gains both rows, and says plainly which of the five to reach for
+
+---
+
+## Phase 06 — React harness
+
+The point of this phase is not the UI. It is that five phases of tables and
+test output become something you can see, and that the differences between the
+algorithms stop needing to be explained.
+
+### Decisions taken before the code
+
+- [ ] **Vite's dev proxy, not CORS.** `server.proxy` forwards `/api` to :8080,
+      so the browser sees one origin and the Go server needs no CORS middleware
+      and no change at all. Recorded because reaching for a CORS header is the
+      obvious move and the wrong one here
+- [ ] **No runtime config editing.** The plan wanted `PUT /config`; it is
+      deferred. Mutable limiters need locking or rebuilding, and the comparison
+      is *cleaner* when all six share one setting anyway. Say so rather than
+      leaving a gap
+- [ ] **No full design pipeline.** A handful of CSS variables, not a design
+      system. This is a developer's instrument, and pretending otherwise would
+      cost more than it returns — noted so the shortcut is a decision, not an
+      omission
+
+### Backend
+
+- [ ] `GET /api/limiters` returns what is actually mounted, so the harness does
+      not hardcode six names that can drift out of step with `main.go`
+- [ ] Nothing else in the Go code changes
+
+### The harness
+
+- [ ] Vite + React + TypeScript, `npm run build` clean with no unused symbols —
+      `tsc -b` is the gate the plan asked for
+- [ ] One tab per limiter, plus a `Compare` tab
+- [ ] Traffic generator with three modes: a single request, a burst of N fired
+      together, and a sustained X per second for Y seconds
+- [ ] **The generator's actual rate is tested**, not assumed. If it claims ten
+      per second and delivers seven, every chart in the app lies and nothing on
+      screen would show it. Vitest, one test, on the scheduler alone
+- [ ] Timeline chart: one mark per request against a time axis, allowed and
+      refused distinguishable without relying on colour alone
+- [ ] `Compare` fires one traffic pattern at all six and stacks the timelines on
+      a shared time axis. Fixed Window's doubled burst, Token Bucket's opening
+      burst and the Queue's even spacing have to be visible without reading a
+      number
+
+### The queue is not like the others
+
+- [ ] The five limiters answer allowed-or-refused; the queue answers *how long
+      you waited*. The harness shows that difference rather than flattening it
+      into the same mark — a queued request that succeeded after 4s is not the
+      same event as one allowed instantly, and a chart that draws them alike is
+      lying about the algorithm
+
+### Gate
+
+- [ ] `npm run build` and `npm run test` clean
+- [ ] Go side still clean: `go vet`, `gofmt`, `make test`, `make lint`
+- [ ] README says how to run both halves
