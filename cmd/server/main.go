@@ -15,6 +15,7 @@ import (
 	"github.com/sorenhoang/go-ratelimiter/internal/httpx"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/fixedwindow"
+	"github.com/sorenhoang/go-ratelimiter/internal/limiter/leakybucket"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowcounter"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/slidingwindowlog"
 	"github.com/sorenhoang/go-ratelimiter/internal/limiter/tokenbucket"
@@ -35,6 +36,12 @@ const (
 	// caller who arrives with a backlog.
 	bucketCapacity        = limitPerWindow
 	bucketRefillPerSecond = 0.5
+
+	// The queue shapes the aggregate flow through its endpoint rather than any
+	// one caller's share, so its rate is a throughput rather than a per-client
+	// allowance. Capacity is how many callers may be kept waiting.
+	queueReleasePerSecond = 2
+	queueCapacity         = 20
 )
 
 func main() {
@@ -85,7 +92,33 @@ func main() {
 		os.Exit(1)
 	}
 
-	mux := api.New([]limiter.Limiter{fw, swl, swc, tb}, true)
+	meter, err := leakybucket.NewMeter(rdb, leakybucket.MeterConfig{
+		Capacity:      bucketCapacity,
+		LeakPerSecond: bucketRefillPerSecond,
+	})
+	if err != nil {
+		log.Error("failed to create leaky bucket meter", "error", err)
+		os.Exit(1)
+	}
+
+	queue, err := leakybucket.NewQueue(leakybucket.QueueConfig{
+		ReleasePerSecond: queueReleasePerSecond,
+		Capacity:         queueCapacity,
+	})
+	if err != nil {
+		log.Error("failed to create leaky bucket queue", "error", err)
+		os.Exit(1)
+	}
+	// Closed before the Redis client, since callers still waiting have to be
+	// released before anything they might touch on the way out goes away.
+	defer func() {
+		if err := queue.Close(); err != nil {
+			log.Error("failed to close queue", "error", err)
+		}
+	}()
+
+	mux := api.New([]limiter.Limiter{fw, swl, swc, tb, meter}, true)
+	api.MountQueue(mux, queue)
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if err := rdb.Ping(r.Context()).Err(); err != nil {
 			log.Error("redis ping failed", "err", err)

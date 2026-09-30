@@ -329,7 +329,7 @@ traffic rather than judging it.
 
 ### Meter — Redis, same shape as the rest
 
-- [ ] `leakybucket.Meter` asserts conformance to `limiter.Limiter` at compile
+- [x] `leakybucket.Meter` asserts conformance to `limiter.Limiter` at compile
       time and mounts with nothing in `internal/limiter` or `internal/httpx`
       changing
 - [x] One `EVAL` per decision, clock from `redis.call('TIME')`, level leaking
@@ -378,11 +378,20 @@ traffic rather than judging it.
 
 ### HTTP
 
-- [ ] Meter mounts through the existing route builder with no change
-- [ ] **`internal/api` does change**, to give the queue a route of its own, and
+- [x] Meter mounts through the existing route builder with no change
+- [x] **`internal/api` does change**, to give the queue a route of its own, and
       the reason is recorded rather than the streak being protected. A handler
       that waits is not a handler that decides, and the middleware contract
       does not cover it
+      > Lighter than expected: `router.go` was not touched at all. The queue got
+      > an additive `MountQueue` in a new file, so `api.New` keeps its signature
+      > and the two kinds of thing mount by two different routes — which reads
+      > better than a shared entry point would have.
+      >
+      > Live: 25 callers against a capacity of 20 at two releases a second gave
+      > 20 × 200 and 5 × 429, the refusals arriving in 0.55ms and the last
+      > release at 9.95s. A client that hangs up mid-wait logs no superfluous
+      > WriteHeader, so the silent branch is doing its job.
 
 ### Gate
 
