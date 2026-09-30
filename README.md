@@ -8,9 +8,9 @@ This is a learning repository. The goal is not a library to import — it is to 
 each algorithm by hand, hit the real gotchas, and end up with a comparison table
 backed by actual benchmarks.
 
-> **Status: four of five algorithms built.** Fixed Window Counter, Sliding
-> Window Log, Sliding Window Counter and Token Bucket all run, behind one
-> interface and one HTTP middleware. Only Leaky Bucket is left. The build
+> **Status: all five algorithms built.** Four of them share one interface and
+> one HTTP middleware; the fifth is where that stops, and it says so. The React
+> harness is what remains. The build
 > plan lives in [`docs/plan.html`](docs/plan.html), and what each phase had to
 > prove before it was called done is in [`docs/acceptance.md`](docs/acceptance.md).
 
@@ -39,6 +39,8 @@ the textbook.
 | Sliding Window Log | **O(limit)** — one sorted set entry per request | Exact by construction | None; the window moves with the requests | Exact — read off the entry that has to expire |
 | Sliding Window Counter | O(1) — two integers | **6.9% of decisions differ from the log** when traffic crowds the limit, 0.03% when it does not | None | Approximate — solves for when the falling estimate clears the limit |
 | Token Bucket | O(1) — two hash fields, one of them fractional | Exact | **The whole capacity, on purpose** — a caller who was quiet may spend the quiet time | Exact — the deficit over the rate, and the only one a client can act on precisely |
+| Leaky Bucket — meter | O(1) — two hash fields, one of them fractional | Exact | The whole capacity, same as above | Exact — the overflow over the rate |
+| Leaky Bucket — queue | O(capacity) — one waiting caller per place | Exact | None — nothing is refused until the queue itself is full | Not applicable: it does not refuse, it waits |
 
 The same 7 requests, every limiter set to the same sustained rate of five per
 ten seconds:
@@ -78,6 +80,30 @@ It errs **strict**: 113 refusals the log would have admitted against 93
 admissions it would have refused. The approximation is conservative rather than
 a hole to drive through, which is what makes trading phase 02's O(limit) memory
 for it a question of user experience rather than of security.
+
+### Which one to reach for
+
+| If you want to | Use |
+|---|---|
+| The cheapest thing that mostly works | **Fixed Window Counter** — and accept that a client can take double the limit across a boundary |
+| An exact answer, and you can afford the memory | **Sliding Window Log** |
+| An exact-enough answer at O(1), which is what most APIs ship | **Sliding Window Counter** — about 7% of decisions differ from exact when traffic crowds the limit, and it errs strict |
+| To let a quiet client spend what it saved up | **Token Bucket**, or the **Leaky Bucket meter**, which is the same algorithm read from the other side |
+| To smooth traffic rather than reject it | **Leaky Bucket queue** — the only one here that makes callers wait instead of turning them away |
+
+Two of the five are the same algorithm. `TestDuality_MeterMatchesTokenBucket`
+replays a fixed sequence through the token bucket and the leaky bucket meter at a
+matching capacity and rate, and they agree on every verdict, every `Remaining`
+and every `RetryAfter`, with `level + tokens` summing to the capacity throughout.
+Pick whichever reads better for the question you are asking — "how full is this
+client's bucket" or "how much credit is left".
+
+The queue is the odd one out, and the only place the shared interface stops. It
+does not implement `limiter.Limiter`, because `AllowN` asks "may this proceed?"
+and answers now while `Wait` answers "not yet" and then "now". It is also the
+only one that is not per caller: each queue owns a goroutine and a ticker, so one
+per client would grow without bound, and it therefore smooths the aggregate flow
+through an endpoint rather than any one client's share.
 
 ### The burst nobody else allows
 
@@ -166,6 +192,6 @@ under a threshold. That number is the whole point of the approximation.
 - [x] **02** Sliding Window Log
 - [x] **03** Sliding Window Counter + divergence test
 - [x] **04** Token Bucket
-- [ ] **05** Leaky Bucket — Redis meter + pure-Go queue
+- [x] **05** Leaky Bucket — Redis meter + pure-Go queue
 - [ ] **06** React harness with the Compare tab
 - [ ] **07** Benchmarks + comparison table

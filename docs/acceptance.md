@@ -395,6 +395,11 @@ traffic rather than judging it.
 
 ### Gate
 
-- [ ] `make test-integration` green against real Redis for the meter
-- [ ] `go vet`, `gofmt`, `make test`, `make lint`, `go test -race` all clean
-- [ ] README gains both rows, and says plainly which of the five to reach for
+- [x] `make test-integration` green against real Redis for the meter
+      > Reads the partial unit out of the hash — real Redis held 0.592 of one
+      > between calls — and replays the duality against the token bucket on the
+      > server that actually runs the scripts, with a tolerance rather than
+      > exactness since the two now run a moment apart on a real clock.
+      > The queue needs no integration suite: there is no Redis in it.
+- [x] `go vet`, `gofmt`, `make test`, `make lint`, `go test -race` all clean
+- [x] README gains both rows, and says plainly which of the five to reach for
