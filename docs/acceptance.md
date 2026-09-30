@@ -453,11 +453,18 @@ algorithms stop needing to be explained.
       > Driven by the API, not a hardcoded list, so a limiter added in main.go
       > appears here without the harness knowing about it. The panels behind
       > the tabs arrive in the next steps.
-- [ ] Traffic generator with three modes: a single request, a burst of N fired
+- [x] Traffic generator with three modes: a single request, a burst of N fired
       together, and a sustained X per second for Y seconds
-- [ ] **The generator's actual rate is tested**, not assumed. If it claims ten
+      > The scheduler is built and tested; the controls that drive it arrive
+      > with the panel in the next step.
+- [x] **The generator's actual rate is tested**, not assumed. If it claims ten
       per second and delivers seven, every chart in the app lies and nothing on
       screen would show it. Vitest, one test, on the scheduler alone
+      > Nine tests, and the one that matters is mutation-checked twice. Awaiting
+      > each response inside the loop makes the gap between sends become the
+      > response time — `expected 99.7 to be less than 80`. Planning offsets as
+      > gaps rather than from the start turns `[0, 250, 500, 750]` into
+      > `[250, 250, 250, 250]`, which is the drift a long run would accumulate.
 - [ ] Timeline chart: one mark per request against a time axis, allowed and
       refused distinguishable without relying on colour alone
 - [ ] `Compare` fires one traffic pattern at all six and stacks the timelines on
