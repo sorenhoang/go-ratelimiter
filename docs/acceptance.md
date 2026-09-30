@@ -514,3 +514,39 @@ algorithms stop needing to be explained.
 - [x] `npm run build` and `npm run test` clean
 - [x] Go side still clean: `go vet`, `gofmt`, `make test`, `make lint`
 - [x] README says how to run both halves
+
+---
+
+## Phase 07 — Benchmarks
+
+The comparison table carries memory in Big-O and accuracy measured against the
+log. The column it has never had is what a decision actually costs.
+
+### What is measured, and what is not
+
+- [ ] Benchmarks run against **real Redis**, behind the integration tag.
+      miniredis interprets Lua in Go, so a number from it would describe the
+      test double rather than the thing being chosen between
+- [ ] All five limiters in **one file**, sharing one harness. Five files with
+      five setups would produce five numbers that cannot honestly be compared
+- [ ] `-benchmem`, since allocations per decision are a Go-side property that
+      the network round trip does not hide
+- [ ] The **queue is excluded**, and the reason recorded. Benchmarking `Wait`
+      would measure the rate it was configured with, which is not a cost
+
+### The measurement has to be honest about itself
+
+- [ ] A local round trip dominates the number, so the absolute figure says more
+      about Redis than about any algorithm. What the table reports is the
+      **difference between them**, and the README says which it is
+- [ ] The sliding window log is benchmarked on a key whose set actually grows,
+      since O(limit) is its defining cost and a benchmark that refuses
+      everything after five requests would never touch it
+- [ ] A baseline: the cost of a Redis round trip doing nothing, so the
+      per-algorithm figures can be read against it rather than in a vacuum
+
+### Gate
+
+- [ ] `make bench` runs something, rather than matching no tests as it does now
+- [ ] README gains the measured column, sourced from a recorded run
+- [ ] `go vet`, `gofmt`, `make test`, `make lint` still clean
