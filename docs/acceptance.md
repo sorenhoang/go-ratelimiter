@@ -524,29 +524,41 @@ log. The column it has never had is what a decision actually costs.
 
 ### What is measured, and what is not
 
-- [ ] Benchmarks run against **real Redis**, behind the integration tag.
+- [x] Benchmarks run against **real Redis**, behind the integration tag.
       miniredis interprets Lua in Go, so a number from it would describe the
       test double rather than the thing being chosen between
-- [ ] All five limiters in **one file**, sharing one harness. Five files with
+- [x] All five limiters in **one file**, sharing one harness. Five files with
       five setups would produce five numbers that cannot honestly be compared
-- [ ] `-benchmem`, since allocations per decision are a Go-side property that
+- [x] `-benchmem`, since allocations per decision are a Go-side property that
       the network round trip does not hide
-- [ ] The **queue is excluded**, and the reason recorded. Benchmarking `Wait`
+- [x] The **queue is excluded**, and the reason recorded. Benchmarking `Wait`
       would measure the rate it was configured with, which is not a cost
 
 ### The measurement has to be honest about itself
 
-- [ ] A local round trip dominates the number, so the absolute figure says more
+- [x] A local round trip dominates the number, so the absolute figure says more
       about Redis than about any algorithm. What the table reports is the
       **difference between them**, and the README says which it is
-- [ ] The sliding window log is benchmarked on a key whose set actually grows,
+      > Measured rather than assumed: the same benchmark over six runs spans
+      > 133.4–139.5µs, and six different benchmarks in one run span
+      > 135.1–151.1µs. So the gap between algorithms is real but small — about
+      > 10µs against 6µs of noise — and the README says it is not something to
+      > choose on. The scripts cost 6–16µs over a bare round trip.
+- [x] The sliding window log is benchmarked on a key whose set actually grows,
       since O(limit) is its defining cost and a benchmark that refuses
       everything after five requests would never touch it
-- [ ] A baseline: the cost of a Redis round trip doing nothing, so the
+      > And the number that matters turned out not to be a latency at all.
+      > `TestMemoryPerKey` asks Redis: after 2000 requests on one key the log
+      > holds 196,392 bytes against 72 for the window counters. It is not
+      > slower — sorted set operations are logarithmic — so the entire price of
+      > exactness is memory, 2700x of it. That test is kept, asserting the
+      > order of magnitude rather than the byte count, which would be a test of
+      > Redis' encoding.
+- [x] A baseline: the cost of a Redis round trip doing nothing, so the
       per-algorithm figures can be read against it rather than in a vacuum
 
 ### Gate
 
-- [ ] `make bench` runs something, rather than matching no tests as it does now
-- [ ] README gains the measured column, sourced from a recorded run
-- [ ] `go vet`, `gofmt`, `make test`, `make lint` still clean
+- [x] `make bench` runs something, rather than matching no tests as it does now
+- [x] README gains the measured column, sourced from a recorded run
+- [x] `go vet`, `gofmt`, `make test`, `make lint` still clean

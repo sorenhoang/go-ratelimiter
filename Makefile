@@ -23,8 +23,8 @@ test: ## Unit tests (miniredis, no Docker needed)
 test-integration: ## Integration tests against real Redis (needs: make up)
 	REDIS_ADDR=$(REDIS_ADDR) go test -race -tags=integration ./...
 
-bench: ## Benchmark AllowN: latency and allocations
-	go test -bench=. -benchmem -run='^$$' ./internal/limiter/...
+bench: ## Benchmark AllowN against real Redis (needs: make up)
+	REDIS_ADDR=$(REDIS_ADDR) go test -bench=. -benchmem -tags=integration -run='^$$' ./internal/limiter/
 
 lint: ## Run golangci-lint
 	@command -v golangci-lint >/dev/null || { \
