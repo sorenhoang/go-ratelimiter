@@ -403,3 +403,114 @@ traffic rather than judging it.
       > The queue needs no integration suite: there is no Redis in it.
 - [x] `go vet`, `gofmt`, `make test`, `make lint`, `go test -race` all clean
 - [x] README gains both rows, and says plainly which of the five to reach for
+
+---
+
+## Phase 06 — React harness
+
+The point of this phase is not the UI. It is that five phases of tables and
+test output become something you can see, and that the differences between the
+algorithms stop needing to be explained.
+
+### Decisions taken before the code
+
+- [x] **Vite's dev proxy, not CORS.** `server.proxy` forwards `/api` to :8080,
+      so the browser sees one origin and the Go server needs no CORS middleware
+      and no change at all. Recorded because reaching for a CORS header is the
+      obvious move and the wrong one here
+      > Verified through the proxy rather than assumed: `GET :5173/api/limiters`
+      > returns the five, and `POST :5173/api/limiters/fixedwindow/check` comes
+      > back 200 with `application/json` and `RateLimit-Limit: 5`. The Go side
+      > is untouched.
+- [x] **No runtime config editing.** The plan wanted `PUT /config`; it is
+      deferred. Mutable limiters need locking or rebuilding, and the comparison
+      is *cleaner* when all six share one setting anyway. Say so rather than
+      leaving a gap
+- [x] **No full design pipeline.** A handful of CSS variables, not a design
+      system. This is a developer's instrument, and pretending otherwise would
+      cost more than it returns — noted so the shortcut is a decision, not an
+      omission
+
+### Backend
+
+- [x] `GET /api/limiters` returns what is actually mounted, so the harness does
+      not hardcode names that can drift out of step with `main.go`
+      > Built from the same loop that mounts the routes, so the list cannot
+      > disagree with what is served. It carries no configured limit: the
+      > Limiter interface does not expose one, and a client learns the real
+      > limit from the RateLimit-Limit header on its first request — what the
+      > server enforces rather than what a config claims.
+      >
+      > It returns five, not six. The queue is not a Limiter, so it is not in
+      > the list; the harness reaches it at its own fixed route.
+- [x] Nothing else in the Go code changes
+
+### The harness
+
+- [x] Vite + React + TypeScript, `npm run build` clean with no unused symbols —
+      `tsc -b` is the gate the plan asked for
+- [x] One tab per limiter, plus a `Compare` tab
+      > Driven by the API, not a hardcoded list, so a limiter added in main.go
+      > appears here without the harness knowing about it. The panels behind
+      > the tabs arrive in the next steps.
+- [x] Traffic generator with three modes: a single request, a burst of N fired
+      together, and a sustained X per second for Y seconds
+      > The scheduler is built and tested; the controls that drive it arrive
+      > with the panel in the next step.
+- [x] **The generator's actual rate is tested**, not assumed. If it claims ten
+      per second and delivers seven, every chart in the app lies and nothing on
+      screen would show it. Vitest, one test, on the scheduler alone
+      > Nine tests, and the one that matters is mutation-checked twice. Awaiting
+      > each response inside the loop makes the gap between sends become the
+      > response time — `expected 99.7 to be less than 80`. Planning offsets as
+      > gaps rather than from the start turns `[0, 250, 500, 750]` into
+      > `[250, 250, 250, 250]`, which is the drift a long run would accumulate.
+- [x] Timeline chart: one mark per request against a time axis, allowed and
+      refused distinguishable without relying on colour alone
+      > A filled circle against a cross, so the two are told apart by shape
+      > before colour. Hand-drawn SVG rather than a chart library: the shape
+      > distinction is the requirement, and a scatter plot makes it awkward.
+      >
+      > The first version was unreadable and the browser showed it. A fixed
+      > one-second axis stacked an entire burst on the origin, and "rate
+      > achieved" divided ten requests by half a millisecond to report
+      > 18000/s — arithmetically true, useless. The axis now spans the data and
+      > picks a round tick, and the rate only appears for a sustained run where
+      > it answers something.
+- [x] `Compare` fires one traffic pattern at all six and stacks the timelines on
+      a shared time axis. Fixed Window's doubled burst, Token Bucket's opening
+      burst and the Queue's even spacing have to be visible without reading a
+      number
+      > Four requests a second for five seconds, all six at once, limiters reset
+      > first so none starts part way through its own quota:
+      >
+      > | | allowed / refused |
+      > |---|---|
+      > | fixedwindow | 10 / 10 — two blocks of green, two of red |
+      > | slidingwindowlog | 5 / 15 — five, then nothing |
+      > | slidingwindowcounter | 7 / 13 — between the two, as the approximation should be |
+      > | tokenbucket | 8 / 12 |
+      > | leakybucket | 8 / 12 — the same row, twice |
+      > | queue | 20 / 0, last caller waited 5.0s |
+      >
+      > The duality proved by test in phase 05 is now visible: token bucket and
+      > the leaky bucket meter draw the same picture. And the queue answers a
+      > different question entirely — nothing refused, someone waited.
+
+### The queue is not like the others
+
+- [x] The five limiters answer allowed-or-refused; the queue answers *how long
+      you waited*. The harness shows that difference rather than flattening it
+      into the same mark — a queued request that succeeded after 4s is not the
+      same event as one allowed instantly, and a chart that draws them alike is
+      lying about the algorithm
+      > A bar for the wait with the mark at its end, and a different headline
+      > number: longest wait rather than refusals. A burst of ten at two a
+      > second gives 10 allowed, 0 refused, 4.92s for the last one — where
+      > fixedwindow answers the same burst with five crosses.
+
+### Gate
+
+- [x] `npm run build` and `npm run test` clean
+- [x] Go side still clean: `go vet`, `gofmt`, `make test`, `make lint`
+- [x] README says how to run both halves

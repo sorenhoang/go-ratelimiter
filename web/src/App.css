@@ -1,0 +1,293 @@
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 20px 64px;
+}
+
+.masthead {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.sub {
+  color: var(--ink-2);
+  margin: 6px 0 0;
+  max-width: 62ch;
+}
+
+.error {
+  background: color-mix(in srgb, var(--refused) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--refused) 40%, transparent);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin: 16px 0 0;
+}
+
+.note {
+  color: var(--ink-2);
+  margin: 0 0 16px;
+  max-width: 72ch;
+}
+
+/* ---------- tabs ---------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 20px 0 0;
+}
+
+.tab {
+  background: none;
+  border-color: transparent;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.tab:hover {
+  color: var(--ink-2);
+}
+
+.tab.on {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.panel {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 20px;
+}
+
+/* ---------- controls ---------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.modes {
+  display: flex;
+  gap: 4px;
+}
+
+.mode {
+  font-size: 13px;
+  color: var(--ink-3);
+  background: none;
+}
+
+.mode.on {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.fire {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------- timeline ---------- */
+
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+
+.timeline-label {
+  flex: 0 0 11em;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--ink-2);
+  text-align: right;
+  /* Long names must not squeeze the chart. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline svg {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 62px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  /* preserveAspectRatio none stretches the marks too, so keep the stroke from
+     being scaled with them. */
+  vector-effect: non-scaling-stroke;
+}
+
+.tl-baseline {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tl-tick {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tl-tick-label {
+  fill: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 9px;
+  text-anchor: middle;
+}
+
+.tl-allowed {
+  fill: var(--allowed);
+}
+
+.tl-refused line {
+  stroke: var(--refused);
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.tl-wait {
+  fill: color-mix(in srgb, var(--waited) 45%, transparent);
+}
+
+/* ---------- stats ---------- */
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.stats dt {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.stats dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.ok {
+  color: var(--allowed);
+}
+
+.bad {
+  color: var(--refused);
+}
+
+.warn {
+  color: var(--waited);
+}
+
+code {
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+@media (max-width: 620px) {
+  .timeline {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+
+  .timeline-label {
+    flex: none;
+    text-align: left;
+  }
+}
+
+/* ---------- compare ---------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.row .timeline {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.row-stats {
+  flex: 0 0 9em;
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+@media (max-width: 620px) {
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+
+  .row-stats {
+    flex: none;
+  }
+}

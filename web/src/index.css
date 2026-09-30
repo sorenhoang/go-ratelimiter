@@ -1,0 +1,90 @@
+:root {
+  /* A handful of variables, not a design system: this is an instrument, and
+     the phase 06 criteria record that shortcut as a decision. */
+  --bg: #0f1418;
+  --surface: #161d23;
+  --surface-2: #1d262e;
+  --line: #2a3640;
+  --ink: #e4ebf1;
+  --ink-2: #9aa9b6;
+  --ink-3: #6b7b88;
+  --accent: #4fb9c4;
+
+  /* Semantic, and used together with a shape difference rather than on their
+     own: a chart that separates outcomes by colour alone is unreadable to a
+     good number of people. */
+  --allowed: #4fc98a;
+  --refused: #e8735c;
+  --waited: #d9a441;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+code,
+.num {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+input {
+  font: inherit;
+  font-family: var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 8px;
+  width: 5.5em;
+}
