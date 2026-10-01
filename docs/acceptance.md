@@ -242,6 +242,13 @@ so O(1) memory, at the cost of an estimate rather than an exact answer.
 
 ## Phase 04 — Token Bucket
 
+> **Correction.** The commits for this phase say the plan had warned that
+> *storing* a Lua float was the dangerous half, and that the measurement
+> reversed it. That is wrong about the plan. `docs/plan.html` says "Redis
+> truncates Lua floats on return", which is exactly what the probe found. The
+> commit messages are left as they are, since they are pushed history; the
+> record that matters is here.
+
 The first one where a burst is a feature rather than a defect, and the first
 whose state is fractional.
 

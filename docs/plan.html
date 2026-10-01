@@ -266,6 +266,27 @@
     </div>
   </header>
 
+  <div class="note" style="max-width:none;margin:24px 0 0">
+    <strong>Kept as written.</strong> This is the plan from before any code, left
+    unchanged as the record of what was expected. Four things turned out
+    differently, and one is worth defending.
+    <br><br>
+    The module path is <code>sorenhoang</code>, not <code>spartan-binhhoang</code>.
+    Integration tests use the compose Redis through <code>REDIS_ADDR</code> rather
+    than testcontainers — the same proof, one fewer dependency. The timeline chart
+    is hand-drawn SVG rather than recharts, because an allowed request had to
+    differ from a refused one by shape and not only by colour. And the figure this
+    plan quotes for phase 03, under one percent, holds only while traffic runs
+    well below the limit: pressed against it the measured divergence is
+    <strong>6.87%</strong>, which is the number worth quoting since that is when a
+    rate limiter is doing its job.
+    <br><br>
+    What it got right, and what a later commit message wrongly claimed it got
+    wrong: the phase 04 warning that <em>Redis truncates a Lua float on return</em>
+    is exactly correct. Storing one keeps its decimals; returning one does not.
+    The plan said so, and the measurement agreed.
+  </div>
+
   <div class="layout">
     <nav class="toc" aria-label="Contents">
       <h2>Contents</h2>

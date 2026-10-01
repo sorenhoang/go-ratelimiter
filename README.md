@@ -25,13 +25,12 @@ easiest algorithm.
 | 01 | Fixed Window Counter | String counter per window | The one that is wrong on purpose — demonstrates the 2× boundary burst |
 | 02 | Sliding Window Log | Sorted set of timestamps | Exact by construction; becomes the ground truth for the others |
 | 03 | Sliding Window Counter | Two string counters, weighted | The approximation that ships — Cloudflare runs this |
-| 04 | Token Bucket | Hash `{tokens, last_refill}` | Burst is a feature here, not an accident |
-| 05 | Leaky Bucket | Hash `{level, last_leak}` + a pure-Go queue variant | Smooths traffic; the queue variant is the Go concurrency exercise |
+| 04 | Token Bucket | Hash `{tokens, refilled_at}` | Burst is a feature here, not an accident |
+| 05 | Leaky Bucket | Hash `{level, leaked_at}` + a pure-Go queue variant | Smooths traffic; the queue variant is the Go concurrency exercise |
 
-### Measured so far
+### Measured
 
-Filled in as each one lands, from the tests and from live runs rather than from
-the textbook.
+From the tests and from live runs rather than from the textbook.
 
 | Pattern | Memory per key | Accuracy | The burst it allows | `RetryAfter` |
 |---------|----------------|----------|---------------------|--------------|
@@ -40,22 +39,24 @@ the textbook.
 | Sliding Window Counter | O(1) — two integers | **6.9% of decisions differ from the log** when traffic crowds the limit, 0.03% when it does not | None | Approximate — solves for when the falling estimate clears the limit |
 | Token Bucket | O(1) — two hash fields, one of them fractional | Exact | **The whole capacity, on purpose** — a caller who was quiet may spend the quiet time | Exact — the deficit over the rate, and the only one a client can act on precisely |
 | Leaky Bucket — meter | O(1) — two hash fields, one of them fractional | Exact | The whole capacity, same as above | Exact — the overflow over the rate |
-| Leaky Bucket — queue | O(capacity) — one waiting caller per place | Exact | None — nothing is refused until the queue itself is full | Not applicable: it does not refuse, it waits |
+| Leaky Bucket — queue | O(capacity) — one waiting caller per place | Not applicable: it does not judge | None — nothing is refused until the queue itself is full | Not applicable: it does not refuse, it waits |
 
-The same 7 requests, every limiter set to the same sustained rate of five per
-ten seconds:
+Seven requests at a shared sustained rate of five per ten seconds, read off the
+`Retry-After` header of the first refusal:
 
-| | `fixedwindow` | `slidingwindowlog` | `slidingwindowcounter` | `tokenbucket` |
-|---|---|---|---|---|
-| `Retry-After` on 429 | `6` | `10` | `5` | **`2`** |
+| | `Retry-After` |
+|---|---|
+| `slidingwindowlog` | **10** — always: the oldest of the five just-sent entries needs a whole window to age out |
+| `tokenbucket` | **2** — always: one token at half a token per second |
+| `leakybucket` meter | **2** — always, and for the same reason, since it is the same algorithm |
+| `fixedwindow` | **1 to 10** — whatever is left of the current slot |
+| `slidingwindowcounter` | varies — it solves for when its estimate decays past the limit |
 
-Each answer falls straight out of how the limiter stores state. Fixed window
-points at its next boundary and then returns the whole allowance at once. The
-log waits for its oldest entry to age out, which frees exactly one slot. The
-counter solves for when its estimate decays past the limit. The bucket knows
-that at half a token per second the next one lands in two seconds — the only
-answer here a client can act on precisely, and the only one that does not
-invite a fresh burst the moment the wait is over.
+The split is the interesting part. Three of them answer with a number a client
+can act on and will get the same answer for next time; two answer with wherever
+the clock happened to be. Fixed window's reply also comes with a catch the others do
+not have: when the wait is over the *entire* allowance is back at once, so it
+invites the next burst at the moment it stops refusing.
 
 `TestAllowN_DeniesTheBurstFixedWindowWouldAllow` exists in both phase 02 and
 phase 03: one request sequence, the opposite verdict from phase 01.
@@ -175,17 +176,27 @@ internal/limiter/      the Limiter interface and the five implementations
 internal/httpx/        RateLimit middleware, key extraction, RateLimit-* headers
 internal/api/          router and handlers
 web/                   Vite + React + TS harness
-docs/plan.html         the full build plan
+docs/plan.html         the original build plan, kept as written
+docs/acceptance.md     what each phase had to prove, and what it measured
 ```
 
 ## Running it
 
 ```bash
-docker compose up -d        # redis:7-alpine
+make up                     # redis:7-alpine, waits until it answers PING
 make run                    # server on :8080
-make test                   # unit tests, miniredis, no Docker needed
-make test-integration       # against real Redis, behind //go:build integration
-make bench                  # latency and allocations per AllowN
+make down                   # stop Redis and drop its data
+
+make test                   # unit tests on miniredis, no Docker needed
+make lint                   # golangci-lint
+make check                  # fmt, tidy, test — everything before a commit
+```
+
+These three need Redis, so `make up` first:
+
+```bash
+make test-integration       # the same scripts against redis:7-alpine
+make bench                  # ns, allocations and bytes per decision
 ```
 
 Fire at a limiter and watch the quota drain:
@@ -234,14 +245,29 @@ cd web && npm run lint
 
 ## Testing
 
-Two layers, both kept on purpose. `miniredis` runs Lua through a Go interpreter rather
-than Redis's own, so float formatting, `TIME` resolution and reply types diverge at the
-edges — unit tests give a fast loop, integration tests prove the scripts behave on real
-Redis.
+Two layers, both kept on purpose. `miniredis` runs Lua through a Go interpreter
+rather than Redis's own, so float formatting, `TIME` resolution and reply types
+can diverge at the edges — unit tests give a fast loop, integration tests prove
+the scripts behave on the server they will actually run on.
 
-The most valuable test in the repository compares Sliding Window Counter against
-Sliding Window Log on one generated traffic sequence and asserts the divergence stays
-under a threshold. That number is the whole point of the approximation.
+Three tests carry more weight than the rest:
+
+- `TestDivergence_AgainstSlidingWindowLog` measures what the approximation costs,
+  against the one algorithm that is exact by construction.
+- `TestDuality_MeterMatchesTokenBucket` asserts that two of the five are the same
+  algorithm, which is easy to believe and easy to break: one boundary written
+  `<` instead of `<=` separates them by a single request at the full mark.
+- `TestMemoryPerKey` asks Redis what a busy key costs, which is the number that
+  actually decides between the log and everything else.
+
+`leakybucket` is the only package that starts goroutines, so it is the only one
+that can leak them: `goleak` runs in its `TestMain` and the suite is exercised
+under `-race` with concurrent callers.
+
+Tests here were checked by breaking the code on purpose and confirming the right
+one went red. That found four tests that passed while protecting nothing —
+including one that asserted a number computed before the write it was meant to
+verify, which read correctly even when two entries collided.
 
 ## Progress
 
